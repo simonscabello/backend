@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "//deleteOutDir": "false para o nodemon nao encontrar dist/ vazio a cada rebuild em watch. O build de producao parte de um contexto limpo (ver .dockerignore).",
+    "deleteOutDir": false
+  }
+}

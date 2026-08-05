@@ -1,0 +1,117 @@
+import { Injectable } from '@nestjs/common';
+import { PositionCategory, type Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import type { CreateTeamDto, UpdateTeamDto } from './dto/team.dto';
+
+/// Catalogo inicial semeado em toda equipe nova. A equipe pode renomear,
+/// desativar ou acrescentar funções depois -- por isso e copia, nao referencia.
+const DEFAULT_POSITIONS: {
+  name: string;
+  category: PositionCategory;
+}[] = [
+  { name: 'Vocalista', category: PositionCategory.VOCAL },
+  { name: 'Violao', category: PositionCategory.INSTRUMENT },
+  { name: 'Guitarra', category: PositionCategory.INSTRUMENT },
+  { name: 'Baixo', category: PositionCategory.INSTRUMENT },
+  { name: 'Teclado', category: PositionCategory.INSTRUMENT },
+  { name: 'Bateria', category: PositionCategory.INSTRUMENT },
+];
+
+@Injectable()
+export class TeamsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(userId: string, userName: string, dto: CreateTeamDto) {
+    const team = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.team.create({
+        data: {
+          name: dto.name,
+          timezone: dto.timezone ?? 'America/Sao_Paulo',
+          createdById: userId,
+          positions: {
+            create: DEFAULT_POSITIONS.map((position, index) => ({
+              ...position,
+              sortOrder: index,
+            })),
+          },
+          memberships: {
+            create: {
+              userId,
+              displayName: dto.displayName ?? userName,
+              role: 'OWNER',
+              joinedAt: new Date(),
+            },
+          },
+        },
+        include: {
+          positions: { orderBy: { sortOrder: 'asc' } },
+          memberships: true,
+        },
+      });
+
+      return created;
+    });
+
+    return {
+      ...toPublicTeam(team),
+      membership: {
+        id: team.memberships[0].id,
+        role: team.memberships[0].role,
+        displayName: team.memberships[0].displayName,
+      },
+      positions: team.positions.map(toPublicPosition),
+    };
+  }
+
+  async findOne(teamId: string) {
+    const team = await this.prisma.team.findUniqueOrThrow({
+      where: { id: teamId },
+      include: {
+        _count: { select: { memberships: { where: { status: 'ACTIVE' } } } },
+      },
+    });
+
+    return { ...toPublicTeam(team), memberCount: team._count.memberships };
+  }
+
+  async update(teamId: string, dto: UpdateTeamDto) {
+    const team = await this.prisma.team.update({
+      where: { id: teamId },
+      data: dto as Prisma.TeamUpdateInput,
+    });
+
+    return toPublicTeam(team);
+  }
+}
+
+function toPublicTeam(team: {
+  id: string;
+  name: string;
+  timezone: string;
+  createdAt: Date;
+}) {
+  return {
+    id: team.id,
+    name: team.name,
+    timezone: team.timezone,
+    createdAt: team.createdAt,
+  };
+}
+
+function toPublicPosition(position: {
+  id: string;
+  name: string;
+  category: PositionCategory;
+  sortOrder: number;
+  isActive: boolean;
+}) {
+  return {
+    id: position.id,
+    name: position.name,
+    category: position.category,
+    sortOrder: position.sortOrder,
+    isActive: position.isActive,
+  };
+}
+
+export { toPublicPosition };

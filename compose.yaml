@@ -1,0 +1,60 @@
+name: escalas-louvor
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-louvor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-louvor}
+      POSTGRES_DB: ${POSTGRES_DB:-louvor}
+      TZ: America/Sao_Paulo
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-louvor} -d ${POSTGRES_DB:-louvor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      target: development
+    restart: unless-stopped
+    command: npm run start:dev
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-louvor}:${POSTGRES_PASSWORD:-louvor}@db:5432/${POSTGRES_DB:-louvor}?schema=public
+      CORS_ORIGINS: "*"
+      JWT_SECRET: ${JWT_SECRET:-desenvolvimento-local-troque-em-producao-32+}
+      INVITE_BASE_URL: ${INVITE_BASE_URL:-}
+      # O hot reload em bind mount do Windows depende de polling, configurado em
+      # tsconfig.json (watchOptions) e nodemon.json (legacyWatch).
+      TZ: America/Sao_Paulo
+    ports:
+      - "${API_PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      # Volume anonimo: os binarios nativos (Prisma, argon2) sao do Linux e nao podem
+      # ser sobrescritos pelo node_modules do host Windows.
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+volumes:
+  pgdata:

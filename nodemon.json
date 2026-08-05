@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/nodemon",
+  "watch": ["dist"],
+  "ext": "js",
+  "exec": "node dist/main.js",
+  "delay": 300,
+  "//legacyWatch": "Bind mount do Windows nao entrega eventos inotify ao container: o watch precisa ser por polling.",
+  "legacyWatch": true,
+  "pollingInterval": 400,
+  "//signal": "SIGKILL e obrigatorio: o engine do Prisma registra handlers de sinal e o processo sobrevive ao SIGTERM, mantendo a porta 3000 ocupada.",
+  "signal": "SIGKILL"
+}
