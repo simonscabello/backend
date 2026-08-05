@@ -16,5 +16,6 @@ prisma/*.db
 # Editores / SO
 .idea/
 .vscode/
+.superpowers/
 .DS_Store
 Thumbs.db
