@@ -5,7 +5,11 @@ import {
 } from '@nestjs/common';
 import { Prisma, type Event } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AssignmentsService } from '../assignments/assignments.service';
+import {
+  AssignmentsService,
+  groupAssignments,
+  type AssignmentRow,
+} from '../assignments/assignments.service';
 import type {
   CreateEventDto,
   DuplicateEventDto,
@@ -28,7 +32,12 @@ export class EventsService {
     }
   }
 
-  private toListItem(event: Event & { team?: { timezone: string } }) {
+  private toListItem(
+    event: Event & {
+      team?: { timezone: string };
+      assignments?: AssignmentRow[];
+    },
+  ) {
     return {
       id: event.id,
       teamId: event.teamId,
@@ -42,10 +51,27 @@ export class EventsService {
       createdAt: event.createdAt.toISOString(),
       updatedAt: event.updatedAt.toISOString(),
       timezone: event.team?.timezone,
-      assignments: [] as const,
+      // A agenda precisa da escalação: é dela que saem o "VOCÊ: Guitarra" nos
+      // cards e o aviso de que ninguém foi escalado. Sem isso o membro teria
+      // de abrir culto por culto para descobrir onde toca.
+      assignments: groupAssignments(event.assignments ?? []),
       songs: [] as const,
     };
   }
+
+  /// Só o necessário para montar a escalação agrupada da listagem.
+  private static readonly assignmentInclude = {
+    include: {
+      membership: {
+        select: {
+          id: true,
+          displayName: true,
+          positions: { select: { positionId: true } },
+        },
+      },
+      position: { select: { id: true, name: true, sortOrder: true } },
+    },
+  } as const;
 
   async create(teamId: string, createdById: string, dto: CreateEventDto) {
     const startsAt = new Date(dto.startsAt);
@@ -78,7 +104,10 @@ export class EventsService {
       },
       orderBy: { startsAt: scope === 'upcoming' ? 'asc' : 'desc' },
       take: limit,
-      include: { team: { select: { timezone: true } } },
+      include: {
+        team: { select: { timezone: true } },
+        assignments: EventsService.assignmentInclude,
+      },
     });
     return events.map((e) => this.toListItem(e));
   }
@@ -92,7 +121,7 @@ export class EventsService {
       where: { id: eventId },
     });
     if (!existing) {
-      throw new NotFoundException('Culto não encontrado.');
+      throw new NotFoundException('Escala não encontrada.');
     }
 
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : existing.startsAt;
@@ -127,7 +156,7 @@ export class EventsService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
       ) {
-        throw new NotFoundException('Culto não encontrado.');
+        throw new NotFoundException('Escala não encontrada.');
       }
       throw error;
     }
@@ -145,7 +174,7 @@ export class EventsService {
       include: { assignments: true, songs: true },
     });
     if (!source) {
-      throw new NotFoundException('Culto não encontrado.');
+      throw new NotFoundException('Escala não encontrada.');
     }
 
     const startsAt = new Date(dto.startsAt);

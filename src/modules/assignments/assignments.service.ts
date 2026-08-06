@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AssignmentItemDto } from './dto/assignment.dto';
+import { UnavailabilitiesService } from '../unavailabilities/unavailabilities.service';
 
 type ScheduleAssignmentMember = {
   id: string;
@@ -30,7 +31,10 @@ type SameDayConflict = {
 
 @Injectable()
 export class AssignmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly unavailabilities: UnavailabilitiesService,
+  ) {}
 
   /// Data civil no fuso da equipe (YYYY-MM-DD), para a regra 19.
   localDateKey(date: Date, timeZone: string): string {
@@ -48,7 +52,7 @@ export class AssignmentsService {
       include: { team: { select: { timezone: true } } },
     });
     if (!event) {
-      throw new NotFoundException('Culto não encontrado.');
+      throw new NotFoundException('Escala não encontrada.');
     }
 
     const membershipIds = [...new Set(items.map((i) => i.membershipId))];
@@ -133,51 +137,17 @@ export class AssignmentsService {
       },
     });
     if (!event) {
-      throw new NotFoundException('Culto não encontrado.');
+      throw new NotFoundException('Escala não encontrada.');
     }
 
-    const registeredByMembership = new Map<string, Set<string>>();
-    for (const assignment of event.assignments) {
-      registeredByMembership.set(
-        assignment.membership.id,
-        new Set(assignment.membership.positions.map((p) => p.positionId)),
-      );
-    }
+    const assignments = groupAssignments(event.assignments);
 
-    const groupMap = new Map<string, ScheduleAssignmentGroup>();
-    for (const assignment of event.assignments) {
-      let group = groupMap.get(assignment.positionId);
-      if (!group) {
-        group = {
-          positionId: assignment.position.id,
-          positionName: assignment.position.name,
-          sortOrder: assignment.position.sortOrder,
-          members: [],
-        };
-        groupMap.set(assignment.positionId, group);
-      }
-      const registered =
-        registeredByMembership.get(assignment.membershipId) ?? new Set();
-      group.members.push({
-        id: assignment.id,
-        membershipId: assignment.membershipId,
-        displayName: assignment.membership.displayName,
-        note: assignment.note,
-        isRegisteredForPosition: registered.has(assignment.positionId),
-      });
-    }
-
-    const assignments = [...groupMap.values()].sort((a, b) => {
-      if (a.sortOrder !== b.sortOrder) {
-        return a.sortOrder - b.sortOrder;
-      }
-      return a.positionName.localeCompare(b.positionName, 'pt-BR');
-    });
-    for (const group of assignments) {
-      group.members.sort((a, b) =>
-        a.displayName.localeCompare(b.displayName, 'pt-BR'),
-      );
-    }
+    // Quem avisou que não pode neste dia. Vai junto da escala para o app
+    // marcar o badge na hora de escalar, sem uma segunda chamada.
+    const unavailable = await this.unavailabilities.findForDate(
+      event.teamId,
+      this.localDateKey(event.startsAt, event.team.timezone),
+    );
 
     const sameDayConflicts = await this.findSameDayConflicts(
       event.id,
@@ -205,8 +175,13 @@ export class AssignmentsService {
       timezone: event.team.timezone,
       assignments,
       songs: [] as const,
+      unavailable,
       warnings: {
         sameDayConflicts,
+        /// Gente escalada que já tinha avisado que não pode neste dia.
+        unavailableAssigned: unavailable.filter((u) =>
+          event.assignments.some((a) => a.membershipId === u.membershipId),
+        ),
       },
     };
   }
@@ -274,4 +249,74 @@ export class AssignmentsService {
 
     return conflicts;
   }
+}
+
+/// Linha de escalação como vem do banco, com o mínimo necessário para agrupar.
+export type AssignmentRow = {
+  id: string;
+  note: string | null;
+  positionId: string;
+  membershipId: string;
+  position: { id: string; name: string; sortOrder: number };
+  membership: {
+    id: string;
+    displayName: string;
+    positions: { positionId: string }[];
+  };
+};
+
+/// Agrupa a escalação por função, ordenando as funções pela ordem do catálogo
+/// da equipe e as pessoas por nome.
+///
+/// Função pura e exportada porque a agenda (lista) e a escala (detalhe)
+/// precisam do mesmo formato: se cada uma agrupasse do seu jeito, o app teria
+/// dois contratos para a mesma informação.
+export function groupAssignments(
+  rows: AssignmentRow[],
+): ScheduleAssignmentGroup[] {
+  const registeredByMembership = new Map<string, Set<string>>();
+  for (const row of rows) {
+    registeredByMembership.set(
+      row.membership.id,
+      new Set(row.membership.positions.map((p) => p.positionId)),
+    );
+  }
+
+  const groupMap = new Map<string, ScheduleAssignmentGroup>();
+  for (const row of rows) {
+    let group = groupMap.get(row.positionId);
+    if (!group) {
+      group = {
+        positionId: row.position.id,
+        positionName: row.position.name,
+        sortOrder: row.position.sortOrder,
+        members: [],
+      };
+      groupMap.set(row.positionId, group);
+    }
+
+    const registered = registeredByMembership.get(row.membershipId) ?? new Set();
+    group.members.push({
+      id: row.id,
+      membershipId: row.membershipId,
+      displayName: row.membership.displayName,
+      note: row.note,
+      isRegisteredForPosition: registered.has(row.positionId),
+    });
+  }
+
+  const groups = [...groupMap.values()].sort((a, b) => {
+    if (a.sortOrder !== b.sortOrder) {
+      return a.sortOrder - b.sortOrder;
+    }
+    return a.positionName.localeCompare(b.positionName, 'pt-BR');
+  });
+
+  for (const group of groups) {
+    group.members.sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, 'pt-BR'),
+    );
+  }
+
+  return groups;
 }

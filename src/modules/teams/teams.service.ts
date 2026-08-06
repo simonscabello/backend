@@ -10,7 +10,7 @@ const DEFAULT_POSITIONS: {
   category: PositionCategory;
 }[] = [
   { name: 'Vocalista', category: PositionCategory.VOCAL },
-  { name: 'Violao', category: PositionCategory.INSTRUMENT },
+  { name: 'Violão', category: PositionCategory.INSTRUMENT },
   { name: 'Guitarra', category: PositionCategory.INSTRUMENT },
   { name: 'Baixo', category: PositionCategory.INSTRUMENT },
   { name: 'Teclado', category: PositionCategory.INSTRUMENT },

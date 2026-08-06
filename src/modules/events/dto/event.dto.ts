@@ -18,7 +18,7 @@ const trim = ({ value }: { value: unknown }) =>
 export class CreateEventDto {
   @Transform(trim)
   @IsString()
-  @MinLength(2, { message: 'Informe o título do culto.' })
+  @MinLength(2, { message: 'Informe o título da escala.' })
   @MaxLength(200)
   title!: string;
 
@@ -52,7 +52,7 @@ export class UpdateEventDto {
   @Transform(trim)
   @IsOptional()
   @IsString()
-  @MinLength(2, { message: 'Informe o título do culto.' })
+  @MinLength(2, { message: 'Informe o título da escala.' })
   @MaxLength(200)
   title?: string;
 
@@ -98,6 +98,6 @@ export class ListEventsQueryDto {
 }
 
 export class DuplicateEventDto {
-  @IsDateString({}, { message: 'Informe a data e hora do novo culto.' })
+  @IsDateString({}, { message: 'Informe a data e hora da nova escala.' })
   startsAt!: string;
 }

@@ -8,6 +8,7 @@ import { TeamsModule } from './modules/teams/teams.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { PositionsModule } from './modules/positions/positions.module';
 import { InvitesModule } from './modules/invites/invites.module';
+import { UnavailabilitiesModule } from './modules/unavailabilities/unavailabilities.module';
 import { EventsModule } from './modules/events/events.module';
 import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -25,6 +26,7 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
     InvitesModule,
     EventsModule,
     AssignmentsModule,
+    UnavailabilitiesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

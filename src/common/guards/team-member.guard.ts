@@ -44,7 +44,7 @@ export class TeamMemberGuard implements CanActivate {
         select: { teamId: true },
       });
       if (!event) {
-        throw new NotFoundException('Culto não encontrado.');
+        throw new NotFoundException('Escala não encontrada.');
       }
       teamId = event.teamId;
     }

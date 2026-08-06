@@ -102,6 +102,7 @@ model Membership {
 
   positions        MembershipPosition[]
   assignments      Assignment[]
+  unavailabilities Unavailability[]
   invitesCreated   Invite[]             @relation("InviteCreatedBy")
   invitesTargeting Invite[]             @relation("InviteTarget")
   eventsCreated    Event[]              @relation("EventCreatedBy")
@@ -111,6 +112,29 @@ model Membership {
   @@unique([teamId, userId])
   @@index([teamId, status])
   @@map("memberships")
+}
+
+/// Dias em que o membro avisou que NAO pode ser escalado.
+///
+/// O modelo e "avisar antes", nao "aceitar depois": a pessoa marca os dias em
+/// que estara fora e quem monta a escala ve isso na hora de escalar, em vez de
+/// montar a escala e esperar confirmacao de todo mundo.
+///
+/// Guardado como dia civil (`@db.Date`), nao timestamp: indisponibilidade e um
+/// dia inteiro no calendario da equipe, e comparar com o fuso evita o classico
+/// "marquei domingo e sumiu no sabado".
+model Unavailability {
+  id           String   @id @default(uuid()) @db.Uuid
+  membershipId String   @map("membership_id") @db.Uuid
+  date         DateTime @db.Date
+  reason       String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, date])
+  @@index([membershipId, date])
+  @@map("unavailabilities")
 }
 
 /// Catalogo de funcoes/instrumentos POR equipe (semeado na criacao da equipe).

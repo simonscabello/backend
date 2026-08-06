@@ -60,9 +60,48 @@ PATH global**; prefixe a sessão do PowerShell:
 
 ## Estado atual
 
-Etapas 0 a 3 concluídas: fundação, contas/autenticação, equipe/membros/funções,
-convites. Faltam as etapas 4 a 8 (cultos, escalação, músicas, acabamento,
-distribuição) — ver `docs/PROMPTS-CURSOR.md`.
+Concluídas: **0 a 5 e 7** — fundação, contas, equipe/membros/funções, convites,
+cultos, escalação e acabamento (compartilhar no WhatsApp, duplicar culto, cache
+de leitura, identidade visual verde com design tokens).
+
+**Faltam duas etapas**, cujos prompts continuam válidos em
+`docs/PROMPTS-CURSOR.md`:
+
+- **Etapa 6 — Músicas.** Não existe módulo `songs` no backend nem feature de
+  músicas no app. A tela de detalhe do culto tem um card "Em breve — repertório
+  do culto" reservando o espaço, e `Event.songs` é um `List<Object?>` solto que
+  deve virar um modelo tipado quando a etapa for feita. O texto de
+  compartilhamento (`schedule_share_text.dart`) já tem o bloco de músicas
+  pronto, lendo defensivamente do mapa.
+- **Etapa 8 — Distribuição.** Não existe `docs/DEPLOY.md`, `GET /version` nem
+  keystore de release configurado.
+
+## Vocabulário: "escala", não "culto"
+
+Na interface, a entidade que o líder cria chama-se **escala**. No código e no
+banco ela continua sendo `Event` / `events` — renomear a tabela e o modelo não
+traria benefício nenhum ao usuário e quebraria migrations. Ao escrever textos
+novos, use "escala"; "culto" só sobrevive como rótulo do **horário** dentro da
+escala (`Culto 09:00` × `Ensaio 19:00`), que é o sentido correto ali.
+
+## Indisponibilidade
+
+O modelo é **avisar antes**, não confirmar depois. Não existe aceitar/recusar
+escala: o integrante marca em `Perfil → Minha disponibilidade` os dias em que
+não pode, e quem monta a escala vê a etiqueta na hora de escalar.
+
+- Tabela `unavailabilities` guarda **dia civil** (`@db.Date`), não timestamp.
+- `GET /events/:id` devolve `unavailable[]` (quem não pode naquele dia) e
+  `warnings.unavailableAssigned[]` (quem foi escalado mesmo assim).
+- **Indisponível não bloqueia escalar** — o líder às vezes já combinou a troca
+  por fora. A tela sinaliza em vermelho e o aviso reaparece depois de salvar.
+- LEADER+ pode marcar indisponibilidade por outra pessoa; MEMBER, só a própria.
+
+## Feature flags
+
+`app/lib/core/config/feature_flags.dart` esconde funcionalidades prontas em vez
+de removê-las. Hoje: `duplicateSchedule = false` — o endpoint, o diálogo e o
+teste continuam funcionando; só a entrada no menu some.
 
 **O schema Prisma já contém TODAS as tabelas do MVP**, incluindo `events`,
 `assignments`, `songs` e `event_songs`. As etapas 4 a 6 normalmente **não
@@ -147,6 +186,17 @@ português, `@Transform` para `trim`/lowercase. Use `ParseUUIDPipe` nos params.
    `flutter test` (app), e peça verificação visual ao usuário.
 8. **Datas em `timestamptz` (UTC) no banco.** A exibição usa `team.timezone`
    (`America/Sao_Paulo`). Nunca guarde horário local.
+9. **A fonte é empacotada, não baixada.** O pacote `google_fonts` foi removido:
+   ele buscava a Plus Jakarta Sans em `fonts.gstatic.com` na primeira execução,
+   o que fazia o app depender de um segundo servidor além da API e degradar
+   para a fonte do sistema em rede ruim. Os `.ttf` estão em `app/assets/fonts`
+   e declarados no `pubspec.yaml` como família `PlusJakartaSans`. **Não
+   reintroduza `google_fonts`.**
+10. **Permissão e identidade vêm da equipe do recurso**, não de `teams.first`.
+    O app assume uma equipe por usuário em vários pontos, mas onde há um
+    `teamId` no objeto (evento, por exemplo), use-o para achar o
+    `Membership` correto — senão quem participa de duas equipes vê o menu de
+    líder onde é apenas membro.
 
 ## Definição de pronto
 

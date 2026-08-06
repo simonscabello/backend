@@ -1,0 +1,53 @@
+#  Deploy do backend NestJS no Railway — sem Docker (Railpack).
+#
+#  Este arquivo fica na raiz do repositório do backend. Com `builder =
+#  "RAILPACK"` o Railway ignora o `Dockerfile` que existe aqui: ele continua
+#  servindo para o ambiente local (`docker compose up -d`), que não muda.
+#
+#  Variáveis obrigatórias no serviço (Settings → Variables):
+#    DATABASE_URL   referência ao Postgres do Railway: ${{Postgres.DATABASE_URL}}
+#    JWT_SECRET     valor aleatório e único; sem default de propósito, a API
+#                   se recusa a subir sem ele
+#    CORS_ORIGINS   domínios permitidos, separados por vírgula (evite "*")
+#  Opcionais:
+#    INVITE_BASE_URL   base do link de convite, quando houver página pública
+#    JWT_ACCESS_TTL_SECONDS / REFRESH_TTL_DAYS   têm padrão no código
+#
+#  PORT é injetada pelo Railway e já é lida em src/config/env.ts.
+
+[build]
+builder = "RAILPACK"
+buildEnvironment = "V3"
+#  `--include=dev` é essencial e foi verificado neste projeto: com
+#  NODE_ENV=production (que o Railway define), `npm ci` não instala o
+#  @nestjs/cli, e o `nest build` falha com "nest: not found". Com a flag, o
+#  binário `node_modules/.bin/nest` aparece de novo.
+#
+#  O `prisma generate` é explícito porque o projeto não tem script postinstall;
+#  sem ele o @prisma/client sobe sem os tipos e o app falha no boot.
+buildCommand = "npm ci --include=dev && npx prisma generate && npm run build"
+
+[deploy]
+runtime = "V2"
+numReplicas = 1
+
+#  /health, não /api/health: o healthcheck fica fora do prefixo /api/v1
+#  (ver `setGlobalPrefix(..., { exclude: ['health'] })` em src/main.ts).
+#  Ele também consulta o banco, então o serviço só é considerado saudável
+#  quando a conexão com o Postgres está de pé.
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+
+#  Migrations antes de trocar a versão no ar. `prisma` está em `dependencies`
+#  (e não em devDependencies) justamente para existir aqui em produção.
+preDeployCommand = "npx prisma migrate deploy"
+
+#  `npm start` roda `nest start`, que recompila e depende do @nestjs/cli — é o
+#  comando de desenvolvimento. Em produção sobe o build já pronto.
+startCommand = "npm run start:prod"
+
+sleepApplication = false
+useLegacyStacker = false
+ipv6EgressEnabled = false
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
