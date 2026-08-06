@@ -6,6 +6,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -31,4 +32,14 @@ export class ReplaceAssignmentsDto {
     { message: 'Não repita o mesmo membro na mesma função.' },
   )
   assignments!: AssignmentItemDto[];
+
+  /// Quem conduz a ministracao do louvor nesta escala. `null` limpa.
+  ///
+  /// Vem junto da escalacao, e nao num PATCH separado, porque precisa ser um
+  /// dos escalados -- salvar as duas coisas na mesma transacao e o que impede
+  /// o ministrante de sobrar apontando para quem saiu da escala.
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID('4', { message: 'ministerMembershipId inválido.' })
+  ministerMembershipId?: string | null;
 }

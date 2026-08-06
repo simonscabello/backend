@@ -48,7 +48,11 @@ export class AssignmentsService {
     }).format(date);
   }
 
-  async replace(eventId: string, items: AssignmentItemDto[]) {
+  async replace(
+    eventId: string,
+    items: AssignmentItemDto[],
+    ministerMembershipId?: string | null,
+  ) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       include: { team: { select: { timezone: true } } },
@@ -100,23 +104,58 @@ export class AssignmentsService {
     }
 
     this.assertRoleCombinations(items, membershipById, positionById);
+    this.assertMinisterIsAssigned(ministerMembershipId, items);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.assignment.deleteMany({ where: { eventId } });
-      if (items.length === 0) {
-        return;
+      if (items.length > 0) {
+        await tx.assignment.createMany({
+          data: items.map((item) => ({
+            eventId,
+            membershipId: item.membershipId,
+            positionId: item.positionId,
+            note: item.note?.trim() || null,
+          })),
+        });
       }
-      await tx.assignment.createMany({
-        data: items.map((item) => ({
-          eventId,
-          membershipId: item.membershipId,
-          positionId: item.positionId,
-          note: item.note?.trim() || null,
-        })),
-      });
+
+      // `undefined` = o cliente não mandou o campo, então não se mexe.
+      // `null` = pedido explícito de limpar. Esvaziar a escala também limpa:
+      // ministrante sem escalação nenhuma não faz sentido.
+      if (ministerMembershipId !== undefined || items.length === 0) {
+        await tx.event.update({
+          where: { id: eventId },
+          data: {
+            ministerMembershipId:
+              items.length === 0 ? null : (ministerMembershipId ?? null),
+          },
+        });
+      }
     });
 
     return this.buildSchedule(eventId);
+  }
+
+  /// O ministrante precisa estar escalado.
+  ///
+  /// Quem conduz a ministração está no culto, em alguma função. Aceitar alguém
+  /// de fora da escala deixaria o texto compartilhado anunciando uma pessoa
+  /// que não aparece em lugar nenhum da lista.
+  private assertMinisterIsAssigned(
+    ministerMembershipId: string | null | undefined,
+    items: AssignmentItemDto[],
+  ): void {
+    if (!ministerMembershipId) return;
+
+    const assigned = items.some(
+      (item) => item.membershipId === ministerMembershipId,
+    );
+    if (!assigned) {
+      throw new BadRequestException({
+        code: 'MINISTER_NOT_ASSIGNED',
+        message: 'O ministrante precisa estar escalado em alguma função.',
+      });
+    }
   }
 
   /// Combinações proibidas dentro de uma mesma escala.
@@ -199,6 +238,7 @@ export class AssignmentsService {
       where: { id: eventId },
       include: {
         team: { select: { timezone: true } },
+        minister: { select: { id: true, displayName: true } },
         services: {
           orderBy: { startsAt: 'asc' },
           select: { id: true, label: true, startsAt: true, sortOrder: true },
@@ -258,6 +298,7 @@ export class AssignmentsService {
       timezone: event.team.timezone,
       assignments,
       services: toPublicServices(event.services),
+      minister: toPublicMinister(event.minister),
       songs: [] as const,
       unavailable,
       warnings: {
@@ -348,6 +389,14 @@ export type AssignmentRow = {
     positions: { positionId: string }[];
   };
 };
+
+/// Quem conduz a ministração do louvor, no formato que o app consome.
+export function toPublicMinister(
+  minister: { id: string; displayName: string } | null | undefined,
+) {
+  if (!minister) return null;
+  return { membershipId: minister.id, displayName: minister.displayName };
+}
 
 /// Agrupa a escalação por função, ordenando as funções pela ordem do catálogo
 /// da equipe e as pessoas por nome.

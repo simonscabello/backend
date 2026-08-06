@@ -115,6 +115,7 @@ model Membership {
   invitesCreated   Invite[]             @relation("InviteCreatedBy")
   invitesTargeting Invite[]             @relation("InviteTarget")
   eventsCreated    Event[]              @relation("EventCreatedBy")
+  eventsMinistered Event[]              @relation("EventMinister")
 
   // No Postgres, um indice unico permite multiplos NULLs -- exatamente o que
   // queremos: varios placeholders por equipe, mas uma conta so entra uma vez.
@@ -221,11 +222,23 @@ model Event {
   colorPalette String?     @map("color_palette")
   status       EventStatus @default(PUBLISHED)
   createdById  String?     @map("created_by") @db.Uuid
+
+  /// Quem ministra o louvor nesta escala.
+  ///
+  /// Um por escala, nao por funcao: e a pessoa que conduz a ministracao
+  /// inteira -- le os versiculos, fala antes das musicas, delega. Ela tambem
+  /// esta escalada em alguma funcao, mas o papel nao pertence a funcao.
+  ///
+  /// Gravado junto da escalacao (`PUT /events/:id/assignments`), que e onde se
+  /// sabe quem esta escalado: assim ele nunca aponta para quem saiu da escala.
+  ministerMembershipId String? @map("minister_membership_id") @db.Uuid
+
   createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   team        Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
   createdBy   Membership?    @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  minister    Membership?    @relation("EventMinister", fields: [ministerMembershipId], references: [id], onDelete: SetNull)
   assignments Assignment[]
   songs       EventSong[]
   services    EventService[]

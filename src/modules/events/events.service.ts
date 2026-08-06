@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   AssignmentsService,
   groupAssignments,
+  toPublicMinister,
   type AssignmentRow,
 } from '../assignments/assignments.service';
 import type {
@@ -50,6 +51,7 @@ export class EventsService {
       team?: { timezone: string };
       assignments?: AssignmentRow[];
       services?: ServiceRow[];
+      minister?: { id: string; displayName: string } | null;
     },
   ) {
     return {
@@ -70,6 +72,7 @@ export class EventsService {
       // de abrir culto por culto para descobrir onde toca.
       assignments: groupAssignments(event.assignments ?? []),
       services: toPublicServices(event.services ?? []),
+      minister: toPublicMinister(event.minister),
       songs: [] as const,
     };
   }
@@ -117,6 +120,7 @@ export class EventsService {
       include: {
         team: { select: { timezone: true } },
         services: EventsService.serviceInclude,
+        minister: { select: { id: true, displayName: true } },
       },
     });
     return this.toListItem(event);
@@ -135,6 +139,7 @@ export class EventsService {
         team: { select: { timezone: true } },
         assignments: EventsService.assignmentInclude,
         services: EventsService.serviceInclude,
+        minister: { select: { id: true, displayName: true } },
       },
     });
     return events.map((e) => this.toListItem(e));
@@ -272,6 +277,9 @@ export class EventsService {
           notes: source.notes,
           colorPalette: source.colorPalette,
           status: 'PUBLISHED',
+          // A escalação é copiada junto, então o ministrante continua sendo
+          // alguém escalado na cópia.
+          ministerMembershipId: source.ministerMembershipId,
           services: {
             create: services.length > 0
               ? services

@@ -18,6 +18,10 @@ const DEFAULT_POSITIONS: {
   // Apoio: entram na escala do culto, mas nao acumulam com a banda.
   { name: 'Multimídia', category: PositionCategory.TECH },
   { name: 'Som', category: PositionCategory.TECH },
+  // OTHER de proposito: direcao nao e banda nem apoio tecnico, e nao entra em
+  // nenhuma das duas regras de escalacao -- quem dirige o culto pode tambem
+  // cantar ou tocar.
+  { name: 'Direção do culto', category: PositionCategory.OTHER },
 ];
 
 /// Grade de cultos inicial. Ponto de partida editavel, nao regra: a tela de

@@ -15,6 +15,10 @@ export class AssignmentsController {
     @Param('eventId', ParseUUIDPipe) eventId: string,
     @Body() dto: ReplaceAssignmentsDto,
   ) {
-    return this.assignments.replace(eventId, dto.assignments);
+    return this.assignments.replace(
+      eventId,
+      dto.assignments,
+      dto.ministerMembershipId,
+    );
   }
 }
