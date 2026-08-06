@@ -55,8 +55,16 @@ PATH global**; prefixe a sessão do PowerShell:
 - `$env:PATH = 'C:\Users\Acer\flutter\bin;' + $env:PATH`
 - `cd app; flutter analyze` — precisa terminar com "No issues found!"
 - `cd app; flutter test`
-- `cd app; flutter build apk --release --dart-define=API_BASE_URL=http://10.0.2.2:3000`
+- APK para o celular (aponta para produção):
+  `cd app; flutter build apk --release --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app`
+- APK contra o backend local (só serve no emulador):
+  `cd app; flutter build apk --release --dart-define=API_BASE_URL=http://10.0.2.2:3000`
 - instalar no emulador: `C:\Users\Acer\AppData\Local\Android\sdk\platform-tools\adb.exe -s emulator-5554 install -r app\build\app\outputs\flutter-apk\app-release.apk`
+
+**A URL da API em produção é `https://backend-production-b304.up.railway.app`**
+— sem barra no fim e sem `/api/v1`, que o `AppConfig` já concatena. Ela não
+tem default no código de propósito (`AppConfig.apiBaseUrl` cai em `10.0.2.2`),
+então todo build de release precisa passar o `--dart-define`.
 
 ## Estado atual
 

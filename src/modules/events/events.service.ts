@@ -13,8 +13,14 @@ import {
 import type {
   CreateEventDto,
   DuplicateEventDto,
+  EventServiceDto,
   UpdateEventDto,
 } from './dto/event.dto';
+import {
+  normalizeServices,
+  toPublicServices,
+  type ServiceRow,
+} from './event-services';
 
 @Injectable()
 export class EventsService {
@@ -23,11 +29,18 @@ export class EventsService {
     private readonly assignments: AssignmentsService,
   ) {}
 
-  private assertRehearsal(startsAt: Date, rehearsalAt?: Date | null) {
-    if (rehearsalAt && rehearsalAt > startsAt) {
+  /// O ensaio precisa vir antes do **último** culto da escala, não do primeiro.
+  ///
+  /// No domingo da equipe o ensaio é "após a EBD": acontece depois do culto da
+  /// manhã e antes do da noite. Comparar com o primeiro culto rejeitava o caso
+  /// real. O que continua sendo erro é ensaio marcado depois de tudo -- aí não
+  /// há o que ensaiar.
+  private assertRehearsal(lastServiceAt: Date, rehearsalAt?: Date | null) {
+    if (rehearsalAt && rehearsalAt > lastServiceAt) {
       throw new BadRequestException({
         code: 'REHEARSAL_AFTER_START',
-        message: 'O ensaio precisa ser antes ou no mesmo horário do culto.',
+        message:
+          'O ensaio precisa ser antes ou no mesmo horário do último culto.',
       });
     }
   }
@@ -36,6 +49,7 @@ export class EventsService {
     event: Event & {
       team?: { timezone: string };
       assignments?: AssignmentRow[];
+      services?: ServiceRow[];
     },
   ) {
     return {
@@ -55,6 +69,7 @@ export class EventsService {
       // cards e o aviso de que ninguém foi escalado. Sem isso o membro teria
       // de abrir culto por culto para descobrir onde toca.
       assignments: groupAssignments(event.assignments ?? []),
+      services: toPublicServices(event.services ?? []),
       songs: [] as const,
     };
   }
@@ -73,10 +88,18 @@ export class EventsService {
     },
   } as const;
 
+  static readonly serviceInclude = {
+    orderBy: { startsAt: 'asc' },
+    select: { id: true, label: true, startsAt: true, sortOrder: true },
+  } as const;
+
   async create(teamId: string, createdById: string, dto: CreateEventDto) {
-    const startsAt = new Date(dto.startsAt);
+    const services = normalizeServices(dto.services);
+    // O instante da escala é o culto mais cedo: é ele que a agenda ordena e
+    // que decide se a escala já passou.
+    const startsAt = services[0].startsAt;
     const rehearsalAt = dto.rehearsalAt ? new Date(dto.rehearsalAt) : null;
-    this.assertRehearsal(startsAt, rehearsalAt);
+    this.assertRehearsal(services[services.length - 1].startsAt, rehearsalAt);
 
     const event = await this.prisma.event.create({
       data: {
@@ -89,8 +112,12 @@ export class EventsService {
         notes: dto.notes,
         colorPalette: dto.colorPalette,
         status: 'PUBLISHED',
+        services: { create: services },
       },
-      include: { team: { select: { timezone: true } } },
+      include: {
+        team: { select: { timezone: true } },
+        services: EventsService.serviceInclude,
+      },
     });
     return this.toListItem(event);
   }
@@ -107,6 +134,7 @@ export class EventsService {
       include: {
         team: { select: { timezone: true } },
         assignments: EventsService.assignmentInclude,
+        services: EventsService.serviceInclude,
       },
     });
     return events.map((e) => this.toListItem(e));
@@ -124,28 +152,55 @@ export class EventsService {
       throw new NotFoundException('Escala não encontrada.');
     }
 
-    const startsAt = dto.startsAt ? new Date(dto.startsAt) : existing.startsAt;
+    // Omitir `services` mantém os cultos que já existem: editar só o local não
+    // pode apagar os horários.
+    const services = dto.services ? normalizeServices(dto.services) : null;
+
     let rehearsalAt = existing.rehearsalAt;
     if (dto.rehearsalAt !== undefined) {
       rehearsalAt =
         dto.rehearsalAt === null ? null : new Date(dto.rehearsalAt);
     }
-    this.assertRehearsal(startsAt, rehearsalAt);
 
-    await this.prisma.event.update({
-      where: { id: eventId },
-      data: {
-        ...(dto.title !== undefined ? { title: dto.title } : {}),
-        ...(dto.startsAt !== undefined ? { startsAt } : {}),
-        ...(dto.rehearsalAt !== undefined ? { rehearsalAt } : {}),
-        ...(dto.location !== undefined ? { location: dto.location } : {}),
-        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
-        ...(dto.colorPalette !== undefined
-          ? { colorPalette: dto.colorPalette }
-          : {}),
-      },
+    const lastServiceAt = services
+      ? services[services.length - 1].startsAt
+      : await this.lastServiceAt(eventId, existing.startsAt);
+    this.assertRehearsal(lastServiceAt, rehearsalAt);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.event.update({
+        where: { id: eventId },
+        data: {
+          ...(dto.title !== undefined ? { title: dto.title } : {}),
+          ...(services ? { startsAt: services[0].startsAt } : {}),
+          ...(dto.rehearsalAt !== undefined ? { rehearsalAt } : {}),
+          ...(dto.location !== undefined ? { location: dto.location } : {}),
+          ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+          ...(dto.colorPalette !== undefined
+            ? { colorPalette: dto.colorPalette }
+            : {}),
+        },
+      });
+
+      if (services) {
+        // Troca a lista inteira: os cultos não têm identidade própria para o
+        // usuário -- ele pensa "os horários deste domingo são estes".
+        await tx.eventService.deleteMany({ where: { eventId } });
+        await tx.eventService.createMany({
+          data: services.map((service) => ({ ...service, eventId })),
+        });
+      }
     });
+
     return this.assignments.buildSchedule(eventId);
+  }
+
+  private async lastServiceAt(eventId: string, fallback: Date) {
+    const last = await this.prisma.eventService.findFirst({
+      where: { eventId },
+      orderBy: { startsAt: 'desc' },
+    });
+    return last?.startsAt ?? fallback;
   }
 
   async remove(eventId: string) {
@@ -171,7 +226,7 @@ export class EventsService {
   ) {
     const source = await this.prisma.event.findUnique({
       where: { id: eventId },
-      include: { assignments: true, songs: true },
+      include: { assignments: true, songs: true, services: true },
     });
     if (!source) {
       throw new NotFoundException('Escala não encontrada.');
@@ -184,7 +239,26 @@ export class EventsService {
         source.startsAt.getTime() - source.rehearsalAt.getTime();
       rehearsalAt = new Date(startsAt.getTime() - deltaMs);
     }
-    this.assertRehearsal(startsAt, rehearsalAt);
+
+    // Cada culto anda o mesmo tanto que o começo da escala. Duplicar um
+    // domingo de 08:30 e 18:00 para o domingo seguinte às 08:30 tem de
+    // devolver 08:30 e 18:00 -- e não dois cultos às 08:30.
+    const shiftMs = startsAt.getTime() - source.startsAt.getTime();
+    const services = source.services
+      .map((service) => ({
+        label: service.label,
+        startsAt: new Date(service.startsAt.getTime() + shiftMs),
+        sortOrder: service.sortOrder,
+        templateId: service.templateId,
+      }))
+      .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+
+    this.assertRehearsal(
+      services.length > 0
+        ? services[services.length - 1].startsAt
+        : startsAt,
+      rehearsalAt,
+    );
 
     const created = await this.prisma.$transaction(async (tx) => {
       const event = await tx.event.create({
@@ -198,6 +272,11 @@ export class EventsService {
           notes: source.notes,
           colorPalette: source.colorPalette,
           status: 'PUBLISHED',
+          services: {
+            create: services.length > 0
+              ? services
+              : [{ label: 'Culto', startsAt, sortOrder: 0 }],
+          },
         },
       });
 

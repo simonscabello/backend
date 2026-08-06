@@ -20,6 +20,22 @@ const DEFAULT_POSITIONS: {
   { name: 'Som', category: PositionCategory.TECH },
 ];
 
+/// Grade de cultos inicial. Ponto de partida editavel, nao regra: a tela de
+/// nova escala precisa abrir com alguma coisa, e a alternativa era o lider
+/// digitar rotulo e horario na primeira vez.
+///
+/// `startMinutes` = minutos desde a meia-noite (08:30 = 510). `weekday` segue
+/// o `Date.getDay()`: 0 = domingo.
+const DEFAULT_SERVICE_TEMPLATES: {
+  label: string;
+  weekday: number;
+  startMinutes: number;
+}[] = [
+  { label: 'Manhã', weekday: 0, startMinutes: 8 * 60 + 30 },
+  { label: 'Noite', weekday: 0, startMinutes: 19 * 60 },
+  { label: 'Quinta', weekday: 4, startMinutes: 19 * 60 + 30 },
+];
+
 @Injectable()
 export class TeamsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -34,6 +50,12 @@ export class TeamsService {
           positions: {
             create: DEFAULT_POSITIONS.map((position, index) => ({
               ...position,
+              sortOrder: index,
+            })),
+          },
+          serviceTemplates: {
+            create: DEFAULT_SERVICE_TEMPLATES.map((template, index) => ({
+              ...template,
               sortOrder: index,
             })),
           },

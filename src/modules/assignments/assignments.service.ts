@@ -6,6 +6,7 @@ import {
 import type { PositionCategory } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AssignmentItemDto } from './dto/assignment.dto';
+import { toPublicServices } from '../events/event-services';
 import { UnavailabilitiesService } from '../unavailabilities/unavailabilities.service';
 
 type ScheduleAssignmentMember = {
@@ -198,6 +199,10 @@ export class AssignmentsService {
       where: { id: eventId },
       include: {
         team: { select: { timezone: true } },
+        services: {
+          orderBy: { startsAt: 'asc' },
+          select: { id: true, label: true, startsAt: true, sortOrder: true },
+        },
         assignments: {
           include: {
             membership: {
@@ -252,6 +257,7 @@ export class AssignmentsService {
       updatedAt: event.updatedAt.toISOString(),
       timezone: event.team.timezone,
       assignments,
+      services: toPublicServices(event.services),
       songs: [] as const,
       unavailable,
       warnings: {

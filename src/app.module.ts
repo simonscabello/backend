@@ -7,6 +7,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { TeamsModule } from './modules/teams/teams.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { PositionsModule } from './modules/positions/positions.module';
+import { ServiceTemplatesModule } from './modules/service-templates/service-templates.module';
 import { InvitesModule } from './modules/invites/invites.module';
 import { UnavailabilitiesModule } from './modules/unavailabilities/unavailabilities.module';
 import { EventsModule } from './modules/events/events.module';
@@ -23,6 +24,7 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
     TeamsModule,
     MembershipsModule,
     PositionsModule,
+    ServiceTemplatesModule,
     InvitesModule,
     EventsModule,
     AssignmentsModule,
