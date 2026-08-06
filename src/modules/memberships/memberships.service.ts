@@ -18,9 +18,15 @@ export class MembershipsService {
     private readonly tokens: TokenService,
   ) {}
 
-  async list(teamId: string) {
+  /// `includeGuests` só para a tela de escalação: na lista de integrantes da
+  /// equipe o convidado não é membro e não deveria aparecer.
+  async list(teamId: string, includeGuests = false) {
     const members = await this.prisma.membership.findMany({
-      where: { teamId, status: 'ACTIVE' },
+      where: {
+        teamId,
+        status: 'ACTIVE',
+        ...(includeGuests ? {} : { isGuest: false }),
+      },
       include: {
         user: { select: { id: true, name: true, email: true } },
         positions: { include: { position: true } },
@@ -42,6 +48,7 @@ export class MembershipsService {
         displayName: dto.displayName,
         phone: dto.phone,
         role: 'MEMBER',
+        isGuest: dto.isGuest ?? false,
         positions: dto.positionIds?.length
           ? { create: dto.positionIds.map((positionId) => ({ positionId })) }
           : undefined,
@@ -208,6 +215,7 @@ function toPublicMember(member: {
   role: string;
   phone: string | null;
   joinedAt: Date | null;
+  isGuest: boolean;
   user: { id: string; name: string; email: string } | null;
   positions: { position: { id: string; name: string; category: string } }[];
 }) {
@@ -217,6 +225,8 @@ function toPublicMember(member: {
     role: member.role,
     phone: member.phone,
     joinedAt: member.joinedAt,
+    /// Músico de fora, convidado para uma ocasião.
+    isGuest: member.isGuest,
     /// false = membro cadastrado pelo lider que ainda não criou conta.
     hasAccount: member.user !== null,
     email: member.user?.email ?? null,

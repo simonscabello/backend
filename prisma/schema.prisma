@@ -21,9 +21,13 @@ enum MembershipStatus {
   REMOVED
 }
 
+/// A categoria nao e so rotulo: e o que sustenta as regras de escalacao.
+/// - INSTRUMENT: no maximo um por pessoa na mesma escala
+/// - TECH (multimidia, som): nao acumula com banda (vocal ou instrumento)
 enum PositionCategory {
   VOCAL
   INSTRUMENT
+  TECH
   OTHER
 }
 
@@ -91,6 +95,10 @@ model Membership {
   role        MembershipRole   @default(MEMBER)
   status      MembershipStatus @default(ACTIVE)
   phone       String?
+  /// Musico de fora convidado para uma ocasiao. Nao tem conta, nao recebe
+  /// convite e nao aparece como integrante da equipe -- so pode ser escalado
+  /// e sair na escala compartilhada.
+  isGuest     Boolean          @default(false) @map("is_guest")
   joinedAt    DateTime?        @map("joined_at") @db.Timestamptz(3)
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)

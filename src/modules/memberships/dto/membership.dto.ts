@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -32,6 +33,12 @@ export class CreateMemberDto {
   @ArrayUnique()
   @IsUUID('4', { each: true })
   positionIds?: string[];
+
+  /// Musico de fora convidado para uma ocasiao: entra na escala e no texto
+  /// compartilhado, mas nao vira integrante da equipe nem recebe convite.
+  @IsOptional()
+  @IsBoolean()
+  isGuest?: boolean;
 }
 
 export class UpdateMemberDto {

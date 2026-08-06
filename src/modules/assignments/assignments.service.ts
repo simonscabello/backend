@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { PositionCategory } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AssignmentItemDto } from './dto/assignment.dto';
 import { UnavailabilitiesService } from '../unavailabilities/unavailabilities.service';
@@ -97,6 +98,8 @@ export class AssignmentsService {
       }
     }
 
+    this.assertRoleCombinations(items, membershipById, positionById);
+
     await this.prisma.$transaction(async (tx) => {
       await tx.assignment.deleteMany({ where: { eventId } });
       if (items.length === 0) {
@@ -113,6 +116,81 @@ export class AssignmentsService {
     });
 
     return this.buildSchedule(eventId);
+  }
+
+  /// Combinações proibidas dentro de uma mesma escala.
+  ///
+  /// Duas regras que vêm da prática do culto, não do software:
+  ///
+  /// 1. Ninguém toca dois instrumentos ao mesmo tempo. Vocal acumula com um
+  ///    instrumento (canta e toca violão), mas baixo e bateria não existem
+  ///    juntos na mesma pessoa.
+  /// 2. Quem está na multimídia ou no som fica fora da banda. São funções que
+  ///    exigem a pessoa em outro lugar durante o culto inteiro.
+  ///
+  /// Valida no servidor mesmo com o app impedindo na tela: a regra é do
+  /// domínio, e o app é só um dos clientes possíveis.
+  private assertRoleCombinations(
+    items: AssignmentItemDto[],
+    membershipById: Map<string, { displayName: string }>,
+    positionById: Map<string, { name: string; category: PositionCategory }>,
+  ): void {
+    const byMembership = new Map<
+      string,
+      { vocal: string[]; instruments: string[]; tech: string[] }
+    >();
+
+    for (const item of items) {
+      const position = positionById.get(item.positionId);
+      if (!position) continue;
+
+      const entry = byMembership.get(item.membershipId) ?? {
+        vocal: [],
+        instruments: [],
+        tech: [],
+      };
+
+      switch (position.category) {
+        case 'INSTRUMENT':
+          entry.instruments.push(position.name);
+          break;
+        case 'TECH':
+          entry.tech.push(position.name);
+          break;
+        case 'VOCAL':
+          entry.vocal.push(position.name);
+          break;
+        default:
+          break;
+      }
+
+      byMembership.set(item.membershipId, entry);
+    }
+
+    for (const [membershipId, entry] of byMembership) {
+      const name = membershipById.get(membershipId)?.displayName ?? 'A pessoa';
+
+      if (entry.instruments.length > 1) {
+        throw new BadRequestException({
+          code: 'MULTIPLE_INSTRUMENTS',
+          message:
+            `${name} está em ${entry.instruments.join(' e ')}. ` +
+            'Cada pessoa toca um instrumento por escala — vocal pode somar, ' +
+            'dois instrumentos não.',
+        });
+      }
+
+      const inBand = entry.vocal.length > 0 || entry.instruments.length > 0;
+      if (entry.tech.length > 0 && inBand) {
+        const bandRoles = [...entry.vocal, ...entry.instruments].join(' e ');
+        throw new BadRequestException({
+          code: 'TECH_WITH_BAND',
+          message:
+            `${name} está em ${entry.tech.join(' e ')} e também em ` +
+            `${bandRoles}. Quem fica na multimídia ou no som não entra na banda.`,
+        });
+      }
+    }
   }
 
   async buildSchedule(eventId: string) {

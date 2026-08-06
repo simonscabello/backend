@@ -6,7 +6,9 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseBoolPipe,
   ParseUUIDPipe,
+  Query,
   Patch,
   Post,
   UseGuards,
@@ -26,8 +28,12 @@ export class MembershipsController {
   constructor(private readonly members: MembershipsService) {}
 
   @Get()
-  list(@Param('teamId', ParseUUIDPipe) teamId: string) {
-    return this.members.list(teamId);
+  list(
+    @Param('teamId', ParseUUIDPipe) teamId: string,
+    @Query('includeGuests', new ParseBoolPipe({ optional: true }))
+    includeGuests?: boolean,
+  ) {
+    return this.members.list(teamId, includeGuests ?? false);
   }
 
   @TeamRoles('OWNER', 'LEADER')

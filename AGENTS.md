@@ -84,6 +84,28 @@ traria benefício nenhum ao usuário e quebraria migrations. Ao escrever textos
 novos, use "escala"; "culto" só sobrevive como rótulo do **horário** dentro da
 escala (`Culto 09:00` × `Ensaio 19:00`), que é o sentido correto ali.
 
+## Regras de escalação
+
+Duas regras vêm da prática do culto e são validadas **no backend** (o app só
+impede antes, para o líder não descobrir o erro ao salvar):
+
+1. **Um instrumento por pessoa por escala.** Vocal acumula com um instrumento
+   (canta e toca violão); dois instrumentos, nunca.
+2. **Multimídia e som ficam fora da banda.** Quem está em função `TECH` não
+   pode estar em `VOCAL` nem `INSTRUMENT` na mesma escala.
+
+A categoria da `Position` é o que sustenta isso: `VOCAL`, `INSTRUMENT`, `TECH`
+e `OTHER`. Multimídia e Som são semeadas como `TECH` em toda equipe nova.
+Códigos de erro: `MULTIPLE_INSTRUMENTS` e `TECH_WITH_BAND`.
+
+## Convidados
+
+Músico de fora chamado para uma ocasião: `Membership` com `isGuest = true`,
+sem conta e sem convite. **Não aparece na lista de integrantes** — a listagem
+só o inclui com `?includeGuests=true`, usada pela tela de escalação. Ele entra
+na escala e no texto compartilhado, que é como recebe as informações, já que
+não tem o app.
+
 ## Indisponibilidade
 
 O modelo é **avisar antes**, não confirmar depois. Não existe aceitar/recusar

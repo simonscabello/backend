@@ -15,6 +15,9 @@ const DEFAULT_POSITIONS: {
   { name: 'Baixo', category: PositionCategory.INSTRUMENT },
   { name: 'Teclado', category: PositionCategory.INSTRUMENT },
   { name: 'Bateria', category: PositionCategory.INSTRUMENT },
+  // Apoio: entram na escala do culto, mas nao acumulam com a banda.
+  { name: 'Multimídia', category: PositionCategory.TECH },
+  { name: 'Som', category: PositionCategory.TECH },
 ];
 
 @Injectable()
