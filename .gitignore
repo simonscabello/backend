@@ -14,7 +14,9 @@ npm-debug.log*
 prisma/*.db
 
 # Arquivos enviados pelos usuarios (fotos de perfil) -- dados, nao codigo.
-storage/
+# A barra inicial ancora na raiz: sem ela o padrao tambem casava com
+# src/modules/storage/, e o modulo inteiro ficou de fora de um commit.
+/storage/
 
 # Editores / SO
 .idea/
