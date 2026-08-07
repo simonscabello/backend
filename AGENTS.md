@@ -84,6 +84,46 @@ de leitura, identidade visual verde com design tokens).
 - **Etapa 8 — Distribuição.** Não existe `docs/DEPLOY.md`, `GET /version` nem
   keystore de release configurado.
 
+## Conta do usuário: dados, senha e foto
+
+Cada pessoa cuida da própria conta em `Perfil`. Nada disso tem `:id` na rota —
+todas as três agem sobre o dono do token:
+
+- `PATCH /users/me` — nome e e-mail (o e-mail é o login; duplicado dá 409
+  `EMAIL_ALREADY_USED`). Mudar o nome também acerta o `displayName` na equipe,
+  **mas só quando ninguém o personalizou** (o líder pode ter trocado "José
+  Carlos da Silva" por "Zeca", e corrigir o nome da conta não deve desfazer).
+- `POST /users/me/avatar` — `multipart/form-data`, campo `file`.
+- `DELETE /users/me/avatar`.
+- Trocar a senha continua em `POST /auth/change-password`, que exige a atual e
+  derruba as outras sessões. No app tem dois caminhos para a mesma tela:
+  `/trocar-senha` (obrigatória, regra 27) e `/perfil/senha` (voluntária,
+  `ChangePasswordScreen(forced: false)`).
+
+### Fotos em disco — o Volume do Railway
+
+As imagens ficam no **disco**, não no banco nem em S3. `STORAGE_DIR` é a raiz;
+dentro dela só existe `avatars/`. O banco guarda o caminho relativo
+(`users.avatar_path`), e a API devolve `avatarUrl` **relativo ao host**
+(`/uploads/avatars/<uuid>.jpg`) — quem monta o endereço final é o `AppAvatar`,
+porque o mesmo registro responde em `10.0.2.2` no emulador e no domínio do
+Railway.
+
+- **Local:** `STORAGE_DIR=/app/storage` (no compose). Como `backend/` é bind
+  mount, os arquivos aparecem em `backend/storage/` no Windows. Está no
+  `.gitignore` e no `.dockerignore`.
+- **Railway:** o sistema de arquivos do container é descartado a cada deploy.
+  Crie um **Volume no serviço da API com mount path `/data`** e defina
+  `STORAGE_DIR=/data`. Não monte dentro de `/app` (a raiz do build). O Volume
+  só acompanha uma réplica — daí `numReplicas = 1` no `railway.toml`.
+
+Os arquivos são servidos pelo express (`useStaticAssets` em `main.ts`), fora do
+`/api/v1` e **sem JWT**: `Image.network` não manda `Authorization`. O que
+protege é o nome ser um UUID v4, não enumerável. Validação em
+`storage.service.ts`: assinatura do arquivo (JPEG/PNG/WebP — não o `mimetype`
+declarado, que é escrito por quem envia) e 5 MB. O app já reduz para 1024px /
+qualidade 85 antes de enviar, o que também reencoda HEIC em JPEG.
+
 ## Vocabulário: "escala", não "culto"
 
 Na interface, a entidade que o líder cria chama-se **escala**. No código e no
