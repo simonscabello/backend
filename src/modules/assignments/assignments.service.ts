@@ -7,6 +7,10 @@ import type { PositionCategory } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AssignmentItemDto } from './dto/assignment.dto';
 import { toPublicServices } from '../events/event-services';
+import {
+  EVENT_SONG_INCLUDE,
+  toPublicEventSongs,
+} from '../songs/event-songs.service';
 import { UnavailabilitiesService } from '../unavailabilities/unavailabilities.service';
 
 type ScheduleAssignmentMember = {
@@ -260,6 +264,7 @@ export class AssignmentsService {
             },
           },
         },
+        songs: EVENT_SONG_INCLUDE,
       },
     });
     if (!event) {
@@ -302,7 +307,7 @@ export class AssignmentsService {
       assignments,
       services: toPublicServices(event.services),
       minister: toPublicMinister(event.minister),
-      songs: [] as const,
+      songs: toPublicEventSongs(event.songs),
       unavailable,
       warnings: {
         sameDayConflicts,
