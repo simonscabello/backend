@@ -309,6 +309,35 @@ Não vale usar `github.com/code4music/cifraclub-api` para isso: ele recebe
 justamente o problema**, sobe um Selenium por requisição e devolve o conteúdo
 da cifra (obra licenciada) — quando o que se quer é só a URL.
 
+### Repertório dentro da escala
+
+`PUT /events/:eventId/songs` (LEADER+) substitui a lista inteira, na ordem
+recebida, e **responde com a escala completa** — a tela do culto se atualiza
+sem uma segunda chamada. Mesma forma do `PUT` de escalação, e pelo mesmo
+motivo: a pessoa arrasta, tira, acrescenta e salva de uma vez; item a item
+deixaria a escala pela metade se a rede caísse no meio.
+
+- **A posição é normalizada no servidor**, em `0..n-1`, a partir da ordem do
+  array. O cliente manda ordem, não índice — assim não existe posição repetida
+  nem buraco.
+- Música repetida na mesma escala → 400 `DUPLICATE_SONG`. Música de outra
+  equipe → 400 `INVALID_SONG` (o id vem do cliente, e um id válido de outro
+  repertório passaria pela validação de formato).
+- Lista vazia limpa o repertório. É como se tira tudo.
+- `keyOverride` é o tom **desta escala**, sem alterar a música: a mesma canção
+  sobe ou desce conforme quem canta. O servidor devolve `key` já resolvido
+  (o da escala quando existe, senão o da equipe) — nem a tela nem o texto do
+  WhatsApp repetem essa decisão.
+- A escala **não** carrega a letra das músicas: são centenas de caracteres por
+  música e essa já é a tela mais pesada. Título, artista, tom e links bastam.
+- **A listagem da agenda devolve `songs: []`** de propósito: nenhum card mostra
+  músicas, e carregá-las multiplicaria a resposta por evento. O compartilhar
+  sai do detalhe, que tem tudo.
+
+No app: `/agenda/:eventId/repertorio`, com `ReorderableListView`. Use
+**`onReorderItem`**, não `onReorder` — ele já entrega o índice de destino
+corrigido, e compensar à mão erra por um ao arrastar para baixo.
+
 ## Vocabulário: "escala", não "culto"
 
 Na interface, a entidade que o líder cria chama-se **escala**. No código e no
