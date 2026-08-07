@@ -10,6 +10,12 @@
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
+    // Fixo, e nao inferido. Sem isto o TypeScript calcula a raiz a partir do
+    // conjunto de arquivos incluidos: bastou existir um .ts em prisma/ para a
+    // raiz virar a do projeto e a saida migrar de dist/main.js para
+    // dist/src/main.js -- com o nodemon continuando a rodar o dist/main.js
+    // antigo. A API ficou congelada num build velho sem nenhum erro aparecer.
+    "rootDir": "./src",
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
@@ -30,6 +36,8 @@
     "synchronousWatchDirectory": true,
     "excludeDirectories": ["**/node_modules", "dist"]
   },
-  "include": ["src/**/*", "prisma/**/*"],
-  "exclude": ["node_modules", "dist"]
+  // Só `src`: os scripts de `prisma/` rodam por `ts-node`, que já os
+  // typecheca ao executar. Incluí-los aqui é o que deslocava a saída.
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "prisma"]
 }

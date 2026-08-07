@@ -7,11 +7,22 @@
 node_modules/
 dist/
 coverage/
+# Cache incremental do tsc. Fora do dist quando a raiz muda -- e ja causou um
+# build que se dizia atualizado sem ter emitido nada.
+*.tsbuildinfo
 *.log
 npm-debug.log*
 
 # Prisma
 prisma/*.db
+# Os scripts de prisma/ rodam por ts-node. Se aparecer .js aqui, e sobra de
+# build com a raiz errada -- ver armadilha 5b no AGENTS.md.
+prisma/*.js
+prisma/*.js.map
+
+# Arquivos de entrada de import (backup do Holyrics, etc): dados da igreja,
+# nao codigo, e nada aqui e necessario para rodar o projeto.
+/tmp/
 
 # Arquivos enviados pelos usuarios (fotos de perfil) -- dados, nao codigo.
 # A barra inicial ancora na raiz: sem ela o padrao tambem casava com
