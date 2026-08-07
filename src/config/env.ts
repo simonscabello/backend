@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+/// O compose sempre define as variaveis opcionais (`${VAR:-}`), e "" nao
+/// passa em `.optional()` -- vira ausente aqui.
+const vazioComoAusente = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   // O Railway injeta PORT dinamicamente.
@@ -31,11 +36,13 @@ const schema = z.object({
   ///
   /// O preprocess trata string vazia como ausente: o docker compose sempre
   /// define a variavel (`${INVITE_BASE_URL:-}`), e "" nao passa em .url().
-  INVITE_BASE_URL: z.preprocess(
-    (value) =>
-      typeof value === 'string' && value.trim() === '' ? undefined : value,
-    z.string().url().optional(),
-  ),
+  /// Busca de musicas no Spotify (so a busca -- o audio-features foi
+  /// descontinuado). Opcionais: sem elas a rota de busca externa devolve
+  /// lista vazia e a API sobe normalmente. Em producao, definir no Railway.
+  SPOTIFY_CLIENT_ID: z.preprocess(vazioComoAusente, z.string().optional()),
+  SPOTIFY_CLIENT_SECRET: z.preprocess(vazioComoAusente, z.string().optional()),
+
+  INVITE_BASE_URL: z.preprocess(vazioComoAusente, z.string().url().optional()),
 });
 
 const parsed = schema.safeParse(process.env);

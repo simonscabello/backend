@@ -13,6 +13,7 @@ import { ServiceTemplatesModule } from './modules/service-templates/service-temp
 import { InvitesModule } from './modules/invites/invites.module';
 import { UnavailabilitiesModule } from './modules/unavailabilities/unavailabilities.module';
 import { EventsModule } from './modules/events/events.module';
+import { SongsModule } from './modules/songs/songs.module';
 import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
@@ -31,6 +32,7 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
     ServiceTemplatesModule,
     InvitesModule,
     EventsModule,
+    SongsModule,
     AssignmentsModule,
     UnavailabilitiesModule,
   ],

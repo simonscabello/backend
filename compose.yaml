@@ -36,6 +36,12 @@ services:
       # Windows e sobrevivem a recriacao do container. Em producao este caminho
       # e o ponto de montagem do Volume do Railway.
       STORAGE_DIR: /app/storage
+      # Chaves do enriquecimento de musicas (prisma/enrich-songs.ts). Ficam
+      # vazias por padrao: o script pula o provedor que nao tiver chave, e a
+      # API nao precisa de nenhuma delas para subir.
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       # O hot reload em bind mount do Windows depende de polling, configurado em
       # tsconfig.json (watchOptions) e nodemon.json (legacyWatch).
       TZ: America/Sao_Paulo

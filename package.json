@@ -17,7 +17,11 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio --hostname 0.0.0.0",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "import:holyrics": "ts-node prisma/import-holyrics.ts",
+    "enrich:songs": "ts-node prisma/enrich-songs.ts",
+    "export:songs": "ts-node prisma/export-songs.ts",
+    "import:songs": "ts-node prisma/import-songs.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

@@ -348,22 +348,76 @@ model Assignment {
 
 /// Repertorio da equipe. Estrutura minima -- a base de musicas externa entra depois
 /// pelos campos externalId / externalSource.
+/// Hino (do hinario) x cantico (contemporaneo). Fica nulo enquanto ninguem
+/// classificou -- o acervo importado do Holyrics chega quase todo assim.
+enum SongKind {
+  HYMN
+  SONG
+}
+
+/// "Calma ou agitada", como a equipe descreve. Nao vem de BPM: o Deezer
+/// devolve bpm 0 para boa parte do gospel brasileiro, e o que importa e o
+/// andamento que a equipe toca, nao o da gravacao.
+enum SongPace {
+  CALM
+  MODERATE
+  UPBEAT
+}
+
 model Song {
-  id             String   @id @default(uuid()) @db.Uuid
-  teamId         String   @map("team_id") @db.Uuid
-  title          String
-  artist         String?
-  defaultKey     String?  @map("default_key")
-  referenceUrl   String?  @map("reference_url")
-  externalId     String?  @map("external_id")
-  externalSource String?  @map("external_source")
-  isArchived     Boolean  @default(false) @map("is_archived")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id       String    @id @default(uuid()) @db.Uuid
+  teamId   String    @map("team_id") @db.Uuid
+  title    String
+  artist   String?
+  composer String?
+  kind     SongKind?
+  pace     SongPace?
+
+  /// Tom em que A EQUIPE canta. Texto livre ("C", "Bm", "Eb"): validar nota
+  /// por nota nao impediria nenhum erro real e travaria quem anota
+  /// "C (capo 2)". So a equipe preenche -- nenhum script escreve aqui.
+  defaultKey String? @map("default_key")
+
+  /// Tom da GRAVACAO, lido da pagina do CifraClub. E sugestao, nao decisao:
+  /// serve para a tela oferecer um ponto de partida em vez de campo vazio.
+  /// Separado de `defaultKey` de proposito -- misturar os dois faria o campo
+  /// significar "nosso tom" em algumas musicas e "o tom do artista" em
+  /// outras, e quem canta nao teria como saber qual.
+  originalKey String? @map("original_key")
+
+  /// Andamento da gravacao, lido da mesma pagina. Guardado como numero e nao
+  /// convertido em `pace` automaticamente: 140 BPM tocado em meio-tempo e
+  /// sentido como calmo, entao o numero sugere e a equipe decide.
+  bpm Int?
+
+  /// Letra completa. Guardada no banco de proposito: site de letra sai do ar,
+  /// muda de endereco e nao funciona no meio do culto sem internet boa.
+  lyrics String?
+
+  lyricsUrl  String? @map("lyrics_url")
+  chordsUrl  String? @map("chords_url")
+  youtubeUrl String? @map("youtube_url")
+  spotifyUrl String? @map("spotify_url")
+
+  /// Titulo + artista + compositor em minusculas e sem acento, montado pelo
+  /// servico. E o que a busca compara: sem isto, procurar "coracao" nao acha
+  /// "Coração", que e exatamente como as pessoas digitam no celular.
+  searchText String @map("search_text")
+
+  /// Origem quando a musica veio de fora (ex.: "holyrics" + o id do backup).
+  /// E o que torna o import repetivel: rodar de novo atualiza em vez de
+  /// duplicar.
+  externalId     String? @map("external_id")
+  externalSource String? @map("external_source")
+
+  isArchived Boolean  @default(false) @map("is_archived")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   team       Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
   eventSongs EventSong[]
 
+  @@unique([teamId, externalSource, externalId])
   @@index([teamId, isArchived])
   @@map("songs")
 }
