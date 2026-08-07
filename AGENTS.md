@@ -68,19 +68,12 @@ então todo build de release precisa passar o `--dart-define`.
 
 ## Estado atual
 
-Concluídas: **0 a 5 e 7** — fundação, contas, equipe/membros/funções, convites,
-cultos, escalação e acabamento (compartilhar no WhatsApp, duplicar culto, cache
-de leitura, identidade visual verde com design tokens).
+Concluídas: **0 a 7** — fundação, contas, equipe/membros/funções, convites,
+cultos, escalação, músicas e acabamento (compartilhar no WhatsApp, duplicar
+culto, cache de leitura, identidade visual verde com design tokens).
 
-**Faltam duas etapas**, cujos prompts continuam válidos em
-`docs/PROMPTS-CURSOR.md`:
+**Falta uma etapa**, cujo prompt continua válido em `docs/PROMPTS-CURSOR.md`:
 
-- **Etapa 6 — Músicas.** Não existe módulo `songs` no backend nem feature de
-  músicas no app. A tela de detalhe do culto tem um card "Em breve — repertório
-  do culto" reservando o espaço, e `Event.songs` é um `List<Object?>` solto que
-  deve virar um modelo tipado quando a etapa for feita. O texto de
-  compartilhamento (`schedule_share_text.dart`) já tem o bloco de músicas
-  pronto, lendo defensivamente do mapa.
 - **Etapa 8 — Distribuição.** Não existe `docs/DEPLOY.md`, `GET /version` nem
   keystore de release configurado.
 
@@ -309,7 +302,7 @@ Não vale usar `github.com/code4music/cifraclub-api` para isso: ele recebe
 justamente o problema**, sobe um Selenium por requisição e devolve o conteúdo
 da cifra (obra licenciada) — quando o que se quer é só a URL.
 
-### Repertório dentro da escala
+### Repertório dentro da escala — **um por culto**
 
 `PUT /events/:eventId/songs` (LEADER+) substitui a lista inteira, na ordem
 recebida, e **responde com a escala completa** — a tela do culto se atualiza
@@ -317,13 +310,44 @@ sem uma segunda chamada. Mesma forma do `PUT` de escalação, e pelo mesmo
 motivo: a pessoa arrasta, tira, acrescenta e salva de uma vez; item a item
 deixaria a escala pela metade se a rede caísse no meio.
 
-- **A posição é normalizada no servidor**, em `0..n-1`, a partir da ordem do
-  array. O cliente manda ordem, não índice — assim não existe posição repetida
-  nem buraco.
-- Música repetida na mesma escala → 400 `DUPLICATE_SONG`. Música de outra
-  equipe → 400 `INVALID_SONG` (o id vem do cliente, e um id válido de outro
-  repertório passaria pela validação de formato).
+**Cada item traz `serviceId`, e ele é obrigatório.** A manhã e a noite têm
+repertórios próprios — é o caso real da igreja. `EventSong.serviceId` é
+`NOT NULL`: toda escala tem pelo menos um culto, então não existe música de
+escala que não seja de algum culto, e um nulo criaria um estado "sem culto
+definido" para carregar na tela, nas consultas e no texto compartilhado.
+Nulável também deixaria a chave única sem trava, porque no Postgres `NULL` é
+distinto de `NULL` em índice único.
+
+- **A mesma música nos dois cultos são duas linhas**, e isso é o certo: à noite
+  pode ser outro tom, outra ordem, outro recado. A chave é
+  `(eventId, serviceId, songId)`.
+- **A posição é normalizada por culto**, em `0..n-1` dentro de cada um. O
+  cliente manda ordem, não índice. Numerar a escala inteira faria o repertório
+  da noite começar em 4 — e "3ª música da noite" é como a equipe fala.
+- Música repetida **no mesmo culto** → 400 `DUPLICATE_SONG`. Culto de outra
+  escala → 400 `INVALID_SERVICE`. Música de outra equipe → 400 `INVALID_SONG`
+  (os ids vêm do cliente, e um id válido de outro lugar passaria pela
+  validação de formato).
 - Lista vazia limpa o repertório. É como se tira tudo.
+- `duplicate` remapeia os cultos: cada música cai no culto correspondente da
+  cópia, casado **pelo horário** (todos andaram o mesmo tanto), e não pela
+  ordem do `create`, que o Prisma não promete.
+
+#### O `update` da escala faz upsert dos cultos, e isso é obrigatório
+
+`EventServiceDto` aceita `id`. Presente = "é o mesmo culto, só mudou o rótulo
+ou o horário" → `update`; ausente = culto novo → `create`; o que sumiu da
+lista é apagado.
+
+Isto **não é refinamento**: a FK do repertório é `onDelete: Cascade`. Enquanto
+o `update` fazia `deleteMany` + `createMany`, cada edição dava um `id` novo a
+cada culto — e **mudar o horário da noite apagaria as músicas da noite**. O app
+devolve o `id` em `_servicePayload`; note que `Event.displayServices` inventa
+um culto com o **id da escala** quando não há culto gravado (fallback de cache
+antigo), e devolver esse id dá 400 `INVALID_SERVICE`.
+
+Apagar um culto de propósito continua levando o repertório dele — é o que
+"tirei a noite desta semana" significa.
 - `keyOverride` é o tom **desta escala**, sem alterar a música: a mesma canção
   sobe ou desce conforme quem canta. O servidor devolve `key` já resolvido
   (o da escala quando existe, senão o da equipe) — nem a tela nem o texto do
@@ -334,9 +358,85 @@ deixaria a escala pela metade se a rede caísse no meio.
   músicas, e carregá-las multiplicaria a resposta por evento. O compartilhar
   sai do detalhe, que tem tudo.
 
-No app: `/agenda/:eventId/repertorio`, com `ReorderableListView`. Use
+No app: `/agenda/:eventId/repertorio`, com um `ReorderableListView` **por
+culto** (`shrinkWrap`, sem física própria, dentro da rolagem da tela). Use
 **`onReorderItem`**, não `onReorder` — ele já entrega o índice de destino
-corrigido, e compensar à mão erra por um ao arrastar para baixo.
+corrigido, e compensar à mão erra por um ao arrastar para baixo. A `Key` de
+cada linha é `culto:musica`, não só a música: a mesma canção pode estar nos
+dois cultos.
+
+- O **cabeçalho do culto aparece sempre**, mesmo com um culto só: some a dúvida
+  de "para qual culto estou escolhendo" antes de ela existir.
+- No **texto do WhatsApp** o cabeçalho só entra com 2+ cultos com repertório —
+  a linha `⏰ Culto às 09:00` já está no topo, e repeti-la sobre a única lista
+  seria ruído. A numeração recomeça em cada culto.
+- `Event.songsByService` agrupa e é o que a tela, o texto e os testes usam.
+  Culto sem música **continua na lista** (a tela mostra o que falta montar), e
+  música sem `serviceId` — cache gravado antes desta versão — cai no primeiro
+  culto, que é onde ela estava.
+
+### Criar uma escala emenda em escalação e repertório
+
+Criar não é o fim da tarefa: a escala nasce sem ninguém escalado e sem
+repertório. Por isso o formulário de criação **não volta para a agenda** — ele
+emenda em escalação e, dali, em repertório.
+
+**Uma única chamada de navegação por passo**, sempre `pushReplacement`:
+
+```
+[agenda, novo]  →  [agenda, escalar]  →  [agenda, repertorio]  →  [agenda, detalhe]
+```
+
+- `?novo=1` é o que faz cada tela emendar em vez de voltar. Na escalação o
+  botão também vira "Salvar e escolher músicas", para o passo seguinte não
+  ser surpresa.
+- `pushReplacement` e não `push` porque cada passo **já foi salvo**: voltar
+  para ele só ofereceria salvá-lo de novo. Voltar em qualquer ponto cai na
+  agenda, onde a escala nova já aparece.
+- **Editar continua com `pop`.** O encadeamento é só da criação; quem foi
+  editar o horário não quer ser levado para a escalação.
+- A bandeira vai na **query**, não em `extra`: assim o encadeamento sobrevive a
+  um recarregamento da rota, e a tela do repertório sabe buscar a escala
+  sozinha quando chega por URL, sem o `extra`.
+
+Por que não é `go` + `push`: ver a armadilha 11.
+
+### Abrir a música de dentro da escala
+
+Tocar numa música da escala abre `showEventSongSheet` (folha), **para MEMBER
+também** — é justamente quem toca que precisa da cifra.
+
+Folha e não navegação para `/equipe/musicas/:songId` por dois motivos: o tom
+que vale ali é o **desta escala** (`keyOverride`), e aquela tela mostra o tom
+da equipe; e ela usa a **equipe ativa**, não a equipe da escala (armadilha 10).
+A folha recebe `event.teamId` e busca a letra por ele.
+
+A escala não carrega `lyrics` (continua não carregando). A folha busca a música
+inteira só quando alguém a abre, e falhar ali não esconde tom, recado nem
+links, que já vieram com a escala.
+
+### Edição da música: o que a equipe decide × o que veio de fora
+
+`song_form_screen.dart` edita tudo, em duas camadas. Aberto: nome, nosso tom,
+tipo e andamento — o que nenhuma API responde. **Recolhido**: artista,
+compositor, tom da gravação, os quatro links e a letra, que vêm do import e do
+enriquecimento. Fechado, o grupo resume o que já tem ("Tem cifra, letra,
+YouTube") em vez de dizer "mais campos".
+
+A letra **só é enviada quando muda** — são até 20 mil caracteres, e reenviá-los
+a cada ajuste de tom é peso puro na rede da igreja.
+
+Mudar artista ou título refaz `searchText` e passa pela regra 20 no servidor,
+que responde 409 `SONG_ALREADY_EXISTS` — agora é possível esbarrar nela pela
+tela, o que antes não acontecia.
+
+### Cadastrar música durante a montagem da escala
+
+O seletor do repertório tem "Cadastrar", que abre o `AddSongScreen` por
+`Navigator.push` **sobre** a tela da escala — a escala em montagem continua
+viva embaixo e volta intacta. `AddSongScreen` ganhou `onCreated`: nulo mantém o
+caminho normal (vai para o detalhe da música); preenchido devolve a música para
+quem pediu, que a põe no culto e reabre o seletor.
 
 ## Vocabulário: "escala", não "culto"
 
@@ -472,7 +572,13 @@ português, `@Transform` para `trim`/lowercase. Use `ParseUUIDPipe` nos params.
    sem um único erro aparecer**: `tsc` dizia "0 errors", o log do Nest mostrava
    as rotas antigas e a rota nova respondia 404. Se isso voltar a acontecer,
    compare a data de `dist/main.js` com a do fonte antes de procurar bug no
-   código. E apague o `tsconfig.tsbuildinfo` **da raiz do projeto** (não só o
+   código. **Mas compare com `main.ts`, não com o arquivo que você editou**: o
+   build é incremental, e `dist/main.js` só é reemitido quando `main.ts` muda —
+   editar um service deixa `dist/main.js` legitimamente mais velho que o fonte,
+   o que parece o congelamento sem ser. O teste honesto é olhar o `.js`
+   correspondente ao arquivo editado (`dist/modules/.../x.service.js`) e, se
+   quiser certeza, `grep` nele por um identificador que você acabou de
+   escrever. E apague o `tsconfig.tsbuildinfo` **da raiz do projeto** (não só o
    de `dist/`): o cache incremental sobrevive à troca de layout e faz o build
    se declarar atualizado sem emitir nada. Os scripts de `prisma/` rodam por
    `ts-node`, que já os typecheca ao executar.
@@ -495,6 +601,15 @@ português, `@Transform` para `trim`/lowercase. Use `ParseUUIDPipe` nos params.
     `teamId` no objeto (evento, por exemplo), use-o para achar o
     `Membership` correto — senão quem participa de duas equipes vê o menu de
     líder onde é apenas membro.
+11. **Não encadeie `go` e `push` no mesmo frame.** Foi a primeira tentativa do
+    fluxo "criar escala → escalar → músicas": `go('/agenda/:id')` para montar
+    agenda → detalhe e `push` da escalação por cima. **Não funciona.** As duas
+    disparam análises de rota assíncronas, e o `push` toma como base a
+    configuração de **antes** do `go`; a pilha sai indeterminada. O sintoma
+    engana: a tela empilhada aparece normalmente, e o que falha é o passo
+    seguinte, que parece não responder ao botão. Compila, passa no `analyze` e
+    no `flutter test` — só aparece no aparelho. **Um passo, uma chamada de
+    navegação.**
 
 ## Definição de pronto
 
