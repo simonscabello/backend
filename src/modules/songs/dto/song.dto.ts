@@ -50,6 +50,16 @@ class SongFieldsDto {
   @MaxLength(20)
   defaultKey?: string | null;
 
+  /// Tom da GRAVACAO. Continua sendo sugestao, nao decisao -- `defaultKey` e o
+  /// que a equipe canta. Editavel porque o enriquecimento le do CifraClub e
+  /// as vezes nao acha a pagina, ou acha a de outra versao: sem isto o unico
+  /// jeito de corrigir seria mexer no banco.
+  @IsOptional()
+  @Transform(optionalText)
+  @IsString()
+  @MaxLength(20)
+  originalKey?: string | null;
+
   @IsOptional()
   @Transform(optionalText)
   @IsString()
