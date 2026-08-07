@@ -21,7 +21,8 @@
     "import:holyrics": "ts-node prisma/import-holyrics.ts",
     "enrich:songs": "ts-node prisma/enrich-songs.ts",
     "export:songs": "ts-node prisma/export-songs.ts",
-    "import:songs": "ts-node prisma/import-songs.ts"
+    "import:songs": "ts-node prisma/import-songs.ts",
+    "merge:backup": "ts-node prisma/merge-into-backup.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
