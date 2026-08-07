@@ -22,6 +22,16 @@ const trim = ({ value }: { value: unknown }) =>
 
 /// Um horario de culto dentro da escala do dia ("Manha 08:30", "Noite 19:00").
 export class EventServiceDto {
+  /// O culto que ja existe, quando a edicao esta mexendo nele.
+  ///
+  /// Ausente = culto novo. Presente = "este e o mesmo de antes, so mudou o
+  /// rotulo ou o horario", e o servidor faz `update` em vez de recriar. Isso
+  /// importa porque o repertorio aponta para o culto: recriar a linha levaria
+  /// junto as musicas daquele culto.
+  @IsOptional()
+  @IsUUID('4', { message: 'Culto inválido.' })
+  id?: string;
+
   @Transform(trim)
   @IsString()
   @MinLength(1, { message: 'Informe o nome do culto.' })

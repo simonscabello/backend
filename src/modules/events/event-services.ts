@@ -9,8 +9,14 @@ export type ServiceRow = {
   sortOrder: number;
 };
 
-/// Culto pronto para gravar: sem id, com a ordem já resolvida.
+/// Culto pronto para gravar, com a ordem já resolvida.
+///
+/// O `id` só existe quando o cliente está editando um culto que já estava
+/// gravado; em escala nova, e em culto acrescentado numa edição, ele é
+/// `undefined` e o banco gera o próprio. Deixá-lo `undefined` (e não `null`)
+/// é o que permite passar o objeto direto para o `create` do Prisma.
 export type ServiceInput = {
+  id?: string;
   label: string;
   startsAt: Date;
   sortOrder: number;
@@ -26,6 +32,7 @@ export function normalizeServices(
   services: EventServiceDto[],
 ): ServiceInput[] {
   const raw = services.map((s) => ({
+    id: s.id,
     label: s.label,
     startsAt: new Date(s.startsAt),
     templateId: s.templateId ?? null,
@@ -47,6 +54,16 @@ export function normalizeServices(
     throw new BadRequestException({
       code: 'DUPLICATE_SERVICE_TIME',
       message: 'Dois cultos da mesma escala não podem ter o mesmo horário.',
+    });
+  }
+
+  // O mesmo id duas vezes faria dois cultos da lista disputarem a mesma linha:
+  // o segundo sobrescreveria o primeiro e um deles sumiria sem erro nenhum.
+  const ids = raw.map((s) => s.id).filter((id): id is string => Boolean(id));
+  if (new Set(ids).size !== ids.length) {
+    throw new BadRequestException({
+      code: 'DUPLICATE_SERVICE_ID',
+      message: 'O mesmo culto aparece duas vezes na escala.',
     });
   }
 

@@ -20,6 +20,7 @@ import type {
 import {
   normalizeServices,
   toPublicServices,
+  type ServiceInput,
   type ServiceRow,
 } from './event-services';
 
@@ -191,16 +192,63 @@ export class EventsService {
       });
 
       if (services) {
-        // Troca a lista inteira: os cultos não têm identidade própria para o
-        // usuário -- ele pensa "os horários deste domingo são estes".
-        await tx.eventService.deleteMany({ where: { eventId } });
-        await tx.eventService.createMany({
-          data: services.map((service) => ({ ...service, eventId })),
-        });
+        await this.syncServices(tx, eventId, services);
       }
     });
 
     return this.assignments.buildSchedule(eventId);
+  }
+
+  /// Reconcilia os cultos da escala pelo `id`: atualiza os que continuam, cria
+  /// os que entraram e apaga só os que saíram.
+  ///
+  /// Antes isto era `deleteMany` + `createMany`, e era mais curto. Deixou de
+  /// servir quando o repertório passou a apontar para o culto
+  /// (`event_songs.service_id`, `onDelete: Cascade`): recriar as linhas a cada
+  /// edição daria um `id` novo a cada culto, e **mudar o horário da noite
+  /// apagaria as músicas da noite**. O `id` que o cliente devolve é o que diz
+  /// "este é o mesmo culto de antes".
+  private async syncServices(
+    tx: Prisma.TransactionClient,
+    eventId: string,
+    services: ServiceInput[],
+  ) {
+    const existing = await tx.eventService.findMany({
+      where: { eventId },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((service) => service.id));
+
+    // Id que não é desta escala não é engano de digitação: é o cliente
+    // apontando para o culto de outra escala. Recusa em vez de criar em
+    // silêncio -- criar levaria o repertório junto para o lugar errado.
+    for (const service of services) {
+      if (service.id && !existingIds.has(service.id)) {
+        throw new BadRequestException({
+          code: 'INVALID_SERVICE',
+          message: 'Um dos cultos não pertence a esta escala.',
+        });
+      }
+    }
+
+    const kept = services
+      .map((service) => service.id)
+      .filter((id): id is string => Boolean(id));
+
+    // Some com o culto que o líder tirou da escala, e com o repertório dele
+    // junto -- que é o que "tirei a noite desta semana" significa.
+    await tx.eventService.deleteMany({
+      where:
+        kept.length > 0 ? { eventId, id: { notIn: kept } } : { eventId },
+    });
+
+    for (const { id, ...data } of services) {
+      if (id) {
+        await tx.eventService.update({ where: { id }, data });
+      } else {
+        await tx.eventService.create({ data: { ...data, eventId } });
+      }
+    }
   }
 
   private async lastServiceAt(eventId: string, fallback: Date) {
@@ -254,6 +302,9 @@ export class EventsService {
     const shiftMs = startsAt.getTime() - source.startsAt.getTime();
     const services = source.services
       .map((service) => ({
+        // Guardado só para reencontrar o culto de origem ao copiar o
+        // repertório; não vai para o banco.
+        sourceId: service.id,
         label: service.label,
         startsAt: new Date(service.startsAt.getTime() + shiftMs),
         sortOrder: service.sortOrder,
@@ -285,11 +336,28 @@ export class EventsService {
           ministerMembershipId: source.ministerMembershipId,
           services: {
             create: services.length > 0
-              ? services
+              ? services.map(({ sourceId: _sourceId, ...service }) => service)
               : [{ label: 'Culto', startsAt, sortOrder: 0 }],
           },
         },
+        include: { services: { select: { id: true, startsAt: true } } },
       });
+
+      // De qual culto da cópia cada culto da origem virou.
+      //
+      // Casado pelo horário, e não pela ordem do `create`, que o Prisma não
+      // promete devolver: os cultos da mesma escala têm instantes distintos
+      // (é o que DUPLICATE_SERVICE_TIME garante) e todos andaram o mesmo
+      // tanto, então o horário identifica cada um sem ambiguidade.
+      const novoCultoPorHorario = new Map(
+        event.services.map((service) => [service.startsAt.getTime(), service.id]),
+      );
+      const novoCulto = new Map(
+        services.map((service) => [
+          service.sourceId,
+          novoCultoPorHorario.get(service.startsAt.getTime()),
+        ]),
+      );
 
       if (source.assignments.length > 0) {
         await tx.assignment.createMany({
@@ -302,16 +370,27 @@ export class EventsService {
         });
       }
 
-      if (source.songs.length > 0) {
-        await tx.eventSong.createMany({
-          data: source.songs.map((s) => ({
+      // O repertório vai junto, cada música no culto correspondente: duplicar
+      // um domingo de manhã e noite tem de devolver os dois repertórios nos
+      // seus lugares, e não tudo empilhado no primeiro culto.
+      const songs = source.songs
+        .map((s) => {
+          const serviceId = novoCulto.get(s.serviceId);
+          if (!serviceId) return null;
+
+          return {
             eventId: event.id,
+            serviceId,
             songId: s.songId,
             position: s.position,
             keyOverride: s.keyOverride,
             note: s.note,
-          })),
-        });
+          };
+        })
+        .filter((s): s is NonNullable<typeof s> => s !== null);
+
+      if (songs.length > 0) {
+        await tx.eventSong.createMany({ data: songs });
       }
 
       return event;

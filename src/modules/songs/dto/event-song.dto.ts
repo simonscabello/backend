@@ -16,6 +16,15 @@ const optionalText = ({ value }: { value: unknown }) => {
 };
 
 export class SetlistItemDto {
+  /// Em qual culto da escala esta musica entra.
+  ///
+  /// Obrigatorio, e nao opcional com um padrao no servidor: toda escala tem
+  /// pelo menos um culto, e um servidor que escolhesse sozinho estaria
+  /// adivinhando de manha ou de noite -- justamente a pergunta que esta tela
+  /// existe para responder.
+  @IsUUID(undefined, { message: 'Culto inválido no repertório.' })
+  serviceId!: string;
+
   @IsUUID(undefined, { message: 'Música inválida no repertório.' })
   songId!: string;
 
