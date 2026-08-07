@@ -108,7 +108,8 @@ export class EventsService {
       data: {
         teamId,
         createdById,
-        title: dto.title,
+        // String vazia vira nulo: "sem título" é um estado só.
+        title: dto.title?.trim() ? dto.title.trim() : null,
         startsAt,
         rehearsalAt,
         location: dto.location,
@@ -176,7 +177,9 @@ export class EventsService {
       await tx.event.update({
         where: { id: eventId },
         data: {
-          ...(dto.title !== undefined ? { title: dto.title } : {}),
+          ...(dto.title !== undefined
+              ? { title: dto.title.trim() ? dto.title.trim() : null }
+              : {}),
           ...(services ? { startsAt: services[0].startsAt } : {}),
           ...(dto.rehearsalAt !== undefined ? { rehearsalAt } : {}),
           ...(dto.location !== undefined ? { location: dto.location } : {}),

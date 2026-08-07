@@ -28,7 +28,10 @@ type SameDayConflict = {
   membershipId: string;
   displayName: string;
   otherEventId: string;
-  otherEventTitle: string;
+
+  /// Nulo quando a outra escala não tem título -- o caso comum, já que só
+  /// culto especial recebe nome. O app monta o texto a partir da data.
+  otherEventTitle: string | null;
 };
 
 @Injectable()

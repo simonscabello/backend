@@ -208,7 +208,14 @@ model Invite {
 model Event {
   id           String      @id @default(uuid()) @db.Uuid
   teamId       String      @map("team_id") @db.Uuid
-  title        String
+
+  /// Nome do culto especial: "Pascoa", "Ceia", "Batismo".
+  ///
+  /// Nulo na maioria das escalas, e e o caso normal: o domingo comum ja e
+  /// identificado pela data e pelos horarios. Obrigar um titulo produzia
+  /// "Domingo" ao lado de um selo que ja dizia DOM 9 AGO -- uma linha inteira
+  /// repetindo o que estava do lado.
+  title        String?
   /// Instante da escala = horario do culto mais cedo, mantido pelo servico a
   /// cada gravacao. Denormalizado de proposito: e por ele que a agenda ordena,
   /// separa proximos de passados e monta o selo de data. Derivar isso de

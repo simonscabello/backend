@@ -4,6 +4,10 @@ import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
+/// O fuso da equipe nao e configuravel: e sempre America/Sao_Paulo, o padrao
+/// da coluna `teams.timezone`. A coluna continua existindo porque e de onde
+/// toda conversao de horario le -- espalhar a string pelo codigo seria pior --,
+/// mas nenhuma rota aceita altera-la.
 export class CreateTeamDto {
   @Transform(trim)
   @IsString()
@@ -18,11 +22,6 @@ export class CreateTeamDto {
   @MinLength(2)
   @MaxLength(120)
   displayName?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  timezone?: string;
 }
 
 export class UpdateTeamDto {
@@ -32,9 +31,4 @@ export class UpdateTeamDto {
   @MinLength(2)
   @MaxLength(120)
   name?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  timezone?: string;
 }

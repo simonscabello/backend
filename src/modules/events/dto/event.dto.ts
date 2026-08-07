@@ -40,11 +40,13 @@ export class EventServiceDto {
 }
 
 export class CreateEventDto {
+  /// So em culto especial ("Pascoa", "Ceia"). O domingo comum nao precisa de
+  /// nome: a data e os horarios ja identificam a escala.
   @Transform(trim)
+  @IsOptional()
   @IsString()
-  @MinLength(2, { message: 'Informe o título da escala.' })
   @MaxLength(200)
-  title!: string;
+  title?: string;
 
   @IsArray()
   @ArrayMinSize(1, { message: 'A escala precisa de pelo menos um culto.' })
@@ -77,10 +79,11 @@ export class CreateEventDto {
 }
 
 export class UpdateEventDto {
+  /// String vazia limpa o titulo -- e como o formulario devolve um campo que
+  /// o lider apagou.
   @Transform(trim)
   @IsOptional()
   @IsString()
-  @MinLength(2, { message: 'Informe o título da escala.' })
   @MaxLength(200)
   title?: string;
 

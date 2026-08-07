@@ -22,7 +22,7 @@ export class CreatePositionDto {
   name!: string;
 
   @IsEnum(PositionCategory, {
-    message: 'Categoria deve ser VOCAL, INSTRUMENT ou OTHER.',
+    message: 'Categoria deve ser VOCAL, INSTRUMENT, TECH ou OTHER.',
   })
   category!: PositionCategory;
 

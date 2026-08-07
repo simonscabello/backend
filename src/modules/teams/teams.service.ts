@@ -49,7 +49,8 @@ export class TeamsService {
       const created = await tx.team.create({
         data: {
           name: dto.name,
-          timezone: dto.timezone ?? 'America/Sao_Paulo',
+          // Sem `timezone`: a coluna tem o padrão America/Sao_Paulo e ninguém
+          // o altera.
           createdById: userId,
           positions: {
             create: DEFAULT_POSITIONS.map((position, index) => ({
