@@ -1,0 +1,525 @@
+{
+  "info": {
+    "_postman_id": "b7c1e2a4-9d3f-4a10-8c55-2f6e0a1d7c31",
+    "name": "Escalas de Louvor — API",
+    "description": "Backend do sistema de escalas (NestJS).\n\n## Como usar\n\n1. Rode `Auth > Login (OWNER)` **primeiro**. O script de teste guarda o `accessToken` na variável `token` da collection, e todas as outras requisições já usam ele — não precisa copiar nada à mão.\n2. `Músicas > Listar` guarda o id da primeira música em `songId`, que as requisições de detalhe/edição usam.\n\nO access token dura 1 hora. Quando começar a voltar 401, rode o Login de novo (ou o `Refresh`).\n\n## Variáveis\n\n- `rootUrl` — `http://localhost:3000`. Para apontar em produção, troque por `https://backend-production-b304.up.railway.app` (e faça login de novo: o token é assinado com o segredo de cada ambiente).\n- `baseUrl` — `{{rootUrl}}/api/v1`. O `/health` fica fora desse prefixo.\n- `teamId` — a equipe usada nas rotas de repertório.\n- `email` / `password` — conta OWNER do banco local.\n\n## Detalhes que economizam tempo\n\n- Campo desconhecido no corpo devolve **400**: a API roda com `forbidNonWhitelisted`.\n- `kind` aceita `HYMN` ou `SONG`; `pace` aceita `CALM`, `MODERATE` ou `UPBEAT`.\n- A **lista** de músicas não devolve a letra; só o GET de uma música devolve.\n- Erro sempre no mesmo formato: `{ statusCode, code, message, path, timestamp }`. Use o `code` para reagir, o `message` para exibir.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Comece pelo Login: ele preenche o token que o resto da collection usa.",
+      "item": [
+        {
+          "name": "Login (OWNER)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guarda os tokens para o resto da collection nao precisar de copiar e colar.",
+                  "pm.test('login ok', () => pm.response.to.have.status(200));",
+                  "",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set('token', data.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', data.refreshToken);",
+                  "console.log('token salvo, expira em ' + data.expiresIn + 's');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Rota pública. Devolve accessToken (1h), refreshToken (60 dias) e o usuário.\n\nE-mail ou senha errados devolvem 401 `INVALID_CREDENTIALS` — a mesma mensagem para os dois casos, de propósito: não revela quais e-mails têm conta."
+          }
+        },
+        {
+          "name": "Login como MEMBER (Maria)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Vai para uma variavel separada: serve para conferir os 403 sem",
+                  "// perder a sessao do OWNER.",
+                  "pm.collectionVariables.set('memberToken', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"maria@teste.com\",\n  \"password\": \"mariaTeste2026\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Conta MEMBER do banco local. Guarda o token em `memberToken`, usado pela requisição 'Criar música como MEMBER (403)'."
+          }
+        },
+        {
+          "name": "Quem sou eu",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Usuário da sessão + as equipes dele. O `avatarUrl` vem relativo ao host (`/uploads/avatars/x.jpg`) — quem monta o endereço completo é o app."
+          }
+        },
+        {
+          "name": "Renovar sessão (refresh)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set('token', data.accessToken);",
+                  "// O refresh token e rotacionado: o antigo e revogado na hora.",
+                  "pm.collectionVariables.set('refreshToken', data.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "Rotaciona: o refresh token usado é revogado e um par novo é emitido. Reapresentar um token já revogado derruba todas as sessões do usuário — é a defesa contra replay."
+          }
+        },
+        {
+          "name": "Trocar senha",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"trocada12345\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "change-password"]
+            },
+            "description": "Exige a senha atual e derruba as outras sessões; este aparelho recebe um par novo na resposta.\n\nATENÇÃO: isto muda a senha de verdade. Se rodar, atualize a variável `password` ou você não consegue mais fazer login."
+          }
+        },
+        {
+          "name": "Sair",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "204. Revoga o refresh token; o access token continua valendo até expirar."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Minha conta",
+      "description": "Cada um cuida da própria conta: nenhuma rota tem `:id`, todas agem sobre o dono do token.",
+      "item": [
+        {
+          "name": "Editar nome e e-mail",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Samuel Cabello\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me"]
+            },
+            "description": "Mande só o que mudou. Aceita `name` e `email`.\n\n- Corpo vazio → 400 `NOTHING_TO_UPDATE`\n- E-mail de outra conta → 409 `EMAIL_ALREADY_USED`\n\nMudar o nome também acerta o nome exibido na equipe, mas só quando ninguém o personalizou."
+          }
+        },
+        {
+          "name": "Enviar foto de perfil",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "JPG, PNG ou WebP, até 5 MB. Escolha um arquivo aqui antes de enviar."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/me/avatar",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me", "avatar"]
+            },
+            "description": "multipart/form-data, campo `file`. **Não** defina Content-Type à mão: o Postman monta o boundary sozinho.\n\nA validação confere a assinatura do arquivo, não o mimetype declarado — renomear um .txt para .jpg devolve 400 `INVALID_IMAGE`. Acima de 5 MB, 413 `FILE_TOO_LARGE`.\n\nA resposta traz `avatarUrl`; o arquivo fica em `{{rootUrl}}{{avatarUrl}}`, servido sem autenticação (o nome é um UUID)."
+          }
+        },
+        {
+          "name": "Remover foto de perfil",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/me/avatar",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "me", "avatar"]
+            },
+            "description": "200 com o usuário atualizado (`avatarUrl: null`). O arquivo é apagado do disco."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Músicas",
+      "description": "Repertório da equipe. Qualquer integrante lê; só OWNER/LEADER escreve.",
+      "item": [
+        {
+          "name": "Listar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guarda a primeira musica para as requisicoes de detalhe e edicao.",
+                  "const songs = pm.response.json();",
+                  "if (songs.length) {",
+                  "  pm.collectionVariables.set('songId', songs[0].id);",
+                  "  console.log('songId = ' + songs[0].id + ' (' + songs[0].title + ')');",
+                  "}",
+                  "console.log(songs.length + ' musicas');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs"]
+            },
+            "description": "Ordenada por título (sem acento, para não jogar 'Ácaso' depois de 'Zelo').\n\nNão devolve a letra: são centenas de músicas e a letra só importa na tela de uma delas."
+          }
+        },
+        {
+          "name": "Buscar (sem acento)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs?search=coracao",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "coracao",
+                  "description": "Procura em título, artista e compositor, ignorando acento e maiúsculas."
+                }
+              ]
+            },
+            "description": "`coracao` acha 'Abra os Olhos do Meu Coração'. Tente também `guilherme kerr` — a busca cobre o compositor."
+          }
+        },
+        {
+          "name": "Listar incluindo arquivadas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs?includeArchived=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs"],
+              "query": [{ "key": "includeArchived", "value": "true" }]
+            },
+            "description": "Sem este parâmetro, música arquivada não aparece."
+          }
+        },
+        {
+          "name": "Detalhe (com letra)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs/{{songId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs", "{{songId}}"]
+            },
+            "description": "Única rota que devolve `lyrics`. Rode 'Listar' antes para preencher o `songId`.\n\nId de outra equipe devolve 404 (não 403): a API não confirma que o recurso existe para quem não é da equipe."
+          }
+        },
+        {
+          "name": "Criar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('songId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Deus do Impossível\",\n  \"artist\": \"André Valadão\",\n  \"composer\": \"André Valadão\",\n  \"kind\": \"SONG\",\n  \"pace\": \"CALM\",\n  \"defaultKey\": \"G\",\n  \"lyricsUrl\": \"https://www.vagalume.com.br/andre-valadao/deus-do-impossivel.html\",\n  \"chordsUrl\": \"https://www.cifraclub.com.br/andre-valadao/deus-do-impossivel/\",\n  \"youtubeUrl\": \"https://youtube.com/watch?v=exemplo\",\n  \"spotifyUrl\": \"https://open.spotify.com/track/exemplo\",\n  \"lyrics\": \"Deus do impossível\\nA Ti entrego a minha vida\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs"]
+            },
+            "description": "Só `title` é obrigatório; todo o resto é opcional.\n\n`kind`: HYMN | SONG · `pace`: CALM | MODERATE | UPBEAT · `defaultKey`: texto livre, cabe 'G (capo 2)'.\n\nGuarda o id criado em `songId`."
+          }
+        },
+        {
+          "name": "Editar (tom e andamento)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"defaultKey\": \"Bm\",\n  \"pace\": \"UPBEAT\",\n  \"kind\": \"SONG\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs/{{songId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs", "{{songId}}"]
+            },
+            "description": "Mande só o que muda. É por aqui que se completa o que o import do Holyrics deixou vazio: tom, andamento e hino/cântico."
+          }
+        },
+        {
+          "name": "Arquivar",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isArchived\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs/{{songId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs", "{{songId}}"]
+            },
+            "description": "Tira do repertório sem apagar. É o caminho para música já usada em alguma escala."
+          }
+        },
+        {
+          "name": "Excluir",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs/{{songId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs", "{{songId}}"]
+            },
+            "description": "204 quando a música nunca foi usada.\n\nSe ela estiver em alguma escala: 409 `SONG_IN_USE` — as escalas passadas precisam continuar íntegras, então o caminho é arquivar."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Casos de erro",
+      "description": "Os erros que valem conferir antes de escrever a tela. Todos devolvem o mesmo formato, com um `code` para o app reagir.",
+      "item": [
+        {
+          "name": "Música duplicada (409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"deus do IMPOSSÍVEL\",\n  \"artist\": \"andré valadão\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs"]
+            },
+            "description": "Rode depois de 'Criar'. Título + artista são únicos por equipe ignorando maiúsculas → 409 `SONG_ALREADY_EXISTS`.\n\nRepare que o acento está lá: a regra ignora maiúsculas, **não** acentos. Trocar para 'IMPOSSIVEL' sem acento cria uma segunda música — é trava contra duplicata óbvia, não contra variação de grafia."
+          }
+        },
+        {
+          "name": "Campo desconhecido (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Teste\",\n  \"tom\": \"G\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs"]
+            },
+            "description": "`tom` não existe (o campo é `defaultKey`) → 400 com `property tom should not exist`. A API roda com `forbidNonWhitelisted`: erro de digitação no nome do campo aparece na hora, em vez de ser ignorado em silêncio."
+          }
+        },
+        {
+          "name": "Criar música como MEMBER (403)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{memberToken}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Não deveria entrar\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs"]
+            },
+            "description": "Rode 'Login como MEMBER (Maria)' antes. Escrever é só de OWNER/LEADER → 403.\n\nO GET com o mesmo token devolve 200: o músico precisa consultar cifra e tom antes do ensaio."
+          }
+        },
+        {
+          "name": "Sem token (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}/songs",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "{{teamId}}", "songs"]
+            },
+            "description": "O JwtAuthGuard é global: rota sem `@Public()` exige token."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{rootUrl}}/health",
+          "host": ["{{rootUrl}}"],
+          "path": ["health"]
+        },
+        "description": "Fora do prefixo /api/v1 de propósito: é o alvo do healthcheck do compose e do Railway, e consulta o banco — só responde ok com a conexão de pé."
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "rootUrl",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "description": "Troque por https://backend-production-b304.up.railway.app para testar produção (e faça login de novo)."
+    },
+    { "key": "baseUrl", "value": "{{rootUrl}}/api/v1", "type": "string" },
+    {
+      "key": "teamId",
+      "value": "10beae0f-7286-48e0-bb06-af0a3d79d88f",
+      "type": "string",
+      "description": "Ministerio de Louvor, no banco local."
+    },
+    { "key": "email", "value": "samuel@teste.com", "type": "string" },
+    { "key": "password", "value": "senhaFinal789", "type": "string" },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido pelo script do Login."
+    },
+    { "key": "refreshToken", "value": "", "type": "string" },
+    {
+      "key": "memberToken",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido pelo Login da Maria."
+    },
+    {
+      "key": "songId",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido por Listar ou Criar."
+    }
+  ]
+}

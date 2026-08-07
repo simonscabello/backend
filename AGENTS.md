@@ -124,6 +124,191 @@ protege é o nome ser um UUID v4, não enumerável. Validação em
 declarado, que é escrito por quem envia) e 5 MB. O app já reduz para 1024px /
 qualidade 85 antes de enviar, o que também reencoda HEIC em JPEG.
 
+## Músicas (Etapa 6)
+
+`GET|POST /teams/:teamId/songs`, `GET|PATCH|DELETE .../songs/:songId`.
+Qualquer integrante **lê** (o músico precisa achar a cifra e o tom antes do
+ensaio); só `OWNER`/`LEADER` escreve.
+
+No app, em `Equipe → Gerenciar → Repertório` (`/equipe/musicas`): lista com
+busca e o filtro **"faltando dados"**, detalhe com letra e os quatro links, e
+`/equipe/musicas/nova` — **uma caixa de busca, duas fontes**: primeiro o que
+outras equipes já cadastraram (instantâneo e com letra), depois o Spotify.
+A pessoa escolhe; casar automático erraria calado, porque "Aleluia" existe em
+cinco versões.
+
+O que **falta preencher** é o que nenhuma API responde — tom da equipe,
+hino/cântico e andamento. Por isso a lista mostra o tom da gravação em cinza
+ao lado do campo vazio e a edição tem um "Usar F#": o preenchimento vira um
+toque em vez de pesquisa, feito quando a música entra numa escala.
+
+Campos: `title`, `artist`, `composer`, `kind` (`HYMN`/`SONG`), `pace`
+(`CALM`/`MODERATE`/`UPBEAT`), `defaultKey` e quatro links — `lyricsUrl`,
+`chordsUrl`, `youtubeUrl`, `spotifyUrl`. A letra fica no banco (`lyrics`),
+não só o link: site de letra sai do ar e não abre no meio do culto.
+
+- **A lista não devolve `lyrics`** (são centenas de músicas); o `GET` de uma
+  música devolve. Os campos que faltam preencher vêm na lista, porque é por
+  eles que a tela vai filtrar.
+- **`search_text`** é título + artista + compositor em minúsculas e sem
+  acento, montado no serviço. É o que a busca compara: sem isso, procurar
+  "coracao" não acha "Coração" — que é como o título está gravado e não é
+  como as pessoas digitam. A ordenação também usa ele.
+- Regra 20 (título+artista único por equipe, ignorando maiúsculas) e regra 21
+  (**música usada em escala não se exclui, arquiva-se** — 409 `SONG_IN_USE`).
+- **Não existe classificação** (redenção, justificação...). Foi adiada de
+  propósito; entra como coluna nova quando for a hora.
+
+### Busca externa (Spotify + CifraClub)
+
+- `GET /teams/:teamId/songs/search-external?search=` — busca no Spotify.
+- `POST /teams/:teamId/songs/from-external` — cria a música escolhida,
+  resolvendo cifra, letra, tom e andamento no CifraClub (LEADER+).
+
+**Duas etapas de propósito.** A busca é uma chamada só e responde rápido,
+porque a pessoa está com o teclado na mão; resolver a cifra custa até oito
+requisições ao CifraClub e só acontece para a música escolhida. Fazer isso
+para os oito resultados deixaria a busca inutilizável.
+
+- O cliente devolve no POST o que a busca entregou — assim o servidor não
+  guarda estado entre a busca e a escolha.
+- **Título do Spotify vem com subtítulo entre parênteses** ("Consagração
+  (Ao Vivo)") e o CifraClub usa o título curto. As URLs candidatas incluem a
+  versão sem parênteses: verificado, `consagracao-ao-vivo` dá 404 e
+  `consagracao` dá 200.
+- Não achou cifra? Cria só com o que tem. **Nunca inventa link.**
+- `defaultKey` e `pace` nascem vazios: nenhum serviço externo sabe respondê-los.
+- Sem `SPOTIFY_CLIENT_ID`/`SECRET` a busca devolve `[]` e a API sobe normal.
+  **Em produção, definir no Railway** ou a tela de cadastro nasce cega.
+
+O código vive em `src/modules/songs/external/` e é o mesmo que o
+`prisma/enrich-songs.ts` usa — o script importa de lá, não o contrário.
+
+### Repertório de outra equipe (catálogo)
+
+- `GET /teams/:teamId/songs/catalog?search=` — procura a mesma música no
+  repertório das **outras** equipes. Devolve `sourceSongId` e o que cada
+  candidato traz (`hasLyrics`, `hasChords`...), **nunca a letra em si**.
+- `POST /teams/:teamId/songs/from-catalog` — copia para esta equipe (LEADER+).
+
+Existe porque **a maioria das igrejas não tem como exportar acervo de lugar
+nenhum e nenhuma API devolve letra**: quem chega depois só tem letra se alguém
+antes já tiver cadastrado aquela música. Não é tabela nova nem catálogo curado
+— é a própria tabela consultada de lado.
+
+- **Copia, não compartilha.** A partir daí as duas linhas seguem separadas.
+- Copia só o universal. `defaultKey`, `pace` e `isArchived` nascem vazios: são
+  a decisão desta equipe.
+- `externalSource`/`externalId` viajam junto — é o que faz a identidade se
+  propagar e a 10ª igreja reconhecer a música da 1ª.
+- Busca com menos de 2 caracteres devolve vazio: isto lê repertório de
+  terceiros, e despejar a tabela não é o propósito.
+- **`@Get('catalog')` precisa vir antes de `@Get(':songId')`** no controller,
+  senão o Nest casa "catalog" como id e o `ParseUUIDPipe` rejeita com 400.
+
+### Levar o repertório para outro banco
+
+```
+docker compose exec api npm run export:songs -- --team=<uuid> --file=tmp/songs.json
+docker compose exec -e DATABASE_URL="<url do Railway>" api npm run import:songs -- --team=<uuid de producao> --file=tmp/songs.json
+```
+
+Vai **direto ao banco, sem passar pela API**. O arquivo sai sem `id` e sem
+`teamId` — quem decide a equipe de destino é o import, que casa por
+`(equipe, origem, id externo)` e atualiza em vez de duplicar.
+
+`--only-universal` deixa de fora `defaultKey`, `pace` e `isArchived`: use ao
+dar repertório de partida para **outra igreja**; omita ao mover a base da
+mesma igreja para produção.
+
+Trocar o `team_id` das músicas por `UPDATE` também funciona — nada além da
+própria linha guarda o vínculo. Mas **move em vez de copiar**, e depois de
+existir escala com repertório deixa músicas ligadas a eventos de outra equipe.
+
+### Import do Holyrics
+
+```
+docker compose exec api npm run import:holyrics -- --file=tmp/holyrics.js --team=<uuid> [--dry-run]
+```
+
+O arquivo é o backup "cleaned" do Holyrics (`window.CLEANED_SONGS = [...]`) —
+`.js`, não `.json`, por isso o script recorta do primeiro `[` ao último `]` e
+faz `JSON.parse` (nada é avaliado como código). Ele vai em `backend/tmp/`, que
+é gitignored: são dados da igreja, não código.
+
+**É repetível.** A chave é `(team, "holyrics", id do backup)`, então rodar de
+novo atualiza em vez de duplicar — e a atualização **não toca em `defaultKey`,
+`pace` nem `isArchived`**, que são o trabalho manual da equipe.
+
+O que o backup de 288 músicas rendeu: 286 gravadas (2 títulos repetidos), 195
+links de letra, 53 de cifra, 52 do YouTube, 42 do Spotify e 10 marcadas como
+hino (o hinário vem escrito no campo de artista: "Cantor Cristão - 148").
+Tom, andamento e hino/cântico do resto ficam vazios — chutar seria pior.
+
+**Nenhuma API preenche esses campos.** O `audio-features` do Spotify, que dava
+tom e energia, foi descontinuado em 27/11/2024 e devolve 403 para aplicativos
+novos; o `bpm` do Deezer vem 0 para boa parte do gospel brasileiro. E o tom
+que importa é o que a equipe canta, não o da gravação.
+
+### Enriquecimento dos links
+
+```
+docker compose exec api npm run enrich:songs -- --team=<uuid> --dry-run
+```
+
+Completa `spotifyUrl` e `youtubeUrl` das músicas que estão sem eles. Cada
+provedor só roda se a chave dele existir no `.env` (`SPOTIFY_CLIENT_ID`/
+`SECRET`, `YOUTUBE_API_KEY`); sem chave ele é pulado e o outro segue. **A API
+não precisa de nenhuma delas.**
+
+**Letra não entra, e não é omissão:** 285 das 286 músicas já têm a letra
+completa no banco e nenhuma está sem letra *e* sem link. Texto guardado é
+melhor que link, que depende de rede e do site continuar no ar. A API do
+Vagalume, que faria isso, responde **503 em qualquer caminho desde 08/2026** —
+o `www` continua no ar, o `api.` não. Foi verificado; não suponha que voltou
+sem testar.
+
+- **Só grava com casamento forte**: o título tem que bater e as palavras do
+  nome do artista têm que ser subconjunto das do outro, ignorando acento,
+  maiúscula e conectivos (`de`, `da`, `e`...). O `e` importa — o Spotify lista
+  "Aline Barros e Fernandinho" como dois artistas, e sem ignorá-lo o
+  casamento falhava.
+- **Música sem artista não é tentada** pelos provedores de link. Antes deles
+  roda a **recuperação de artista**: 75 das 108 sem artista carregam o nome
+  dele na própria URL que já têm (o Vagalume e o Letras.mus.br no primeiro
+  trecho do caminho, o `*.lyrics.com.br` no subdomínio). O palpite sai do
+  endereço sem gastar requisição, mas **só é gravado depois de confirmado** —
+  ou o Spotify acha a música com aquele artista, ou a página do CifraClub
+  existe. Sem confirmação, fica vazio.
+- Quando o Spotify confirma, grava a **grafia dele** ("Rebanhão", não o
+  "Rebanhao" que sai do slug), e refaz o `searchText`.
+- Nunca sobrescreve link existente nem toca em tom/andamento/hino.
+- O YouTube tem cota de ~100 músicas/dia (busca custa 100 de 10.000 unidades).
+  **Só `quotaExceeded`/`dailyLimitExceeded` derruba o provedor**; os outros 403
+  pulam a música e seguem — chave recém-criada no Google Cloud leva alguns
+  minutos para propagar e responde 403 nesse meio-tempo. Já aconteceu aqui: a
+  mesma busca que falhou voltou 200 minutos depois, sem mudar nada.
+
+**Cifra funciona sem API e sem chave, por montagem de URL + verificação.** O
+CifraClub não tem API pública, mas devolve **404 de verdade** para slug que não
+existe (sem Cloudflare, sem página falsa de "não encontrado") — foi testado. O
+provedor monta `cifraclub.com.br/<artista>/<música>/`, tenta as variações com e
+sem artigos (o site derruba artigos: `eu-vejo-gloria`, `trazendo-arca`) e **só
+grava a que responder 200**. É o 404 que torna o chute seguro: sem ele seria
+adivinhação, com ele é verificação.
+
+Medido contra os links reais do backup: das 29 que tinham cifra **e** artista,
+achou **22 e errou 0** — três apontaram para a mesma música por outro caminho
+(`trazendo-a-arca` × `trazendo-arca`, `cifras.com.br`, `cifraclub.com` sem
+`.br`). A tentativa anterior, sem variações e sem conferir o 404, acertava 17.
+As 7 falhas são cadastro ruim: artista preenchido com número de hinário
+("Cantor Cristão - 439") ou abreviado ("Min. Koinonya de Louvor").
+
+Não vale usar `github.com/code4music/cifraclub-api` para isso: ele recebe
+`/artists/:artist/songs/:song`, ou seja **exige como entrada o slug que é
+justamente o problema**, sobe um Selenium por requisição e devolve o conteúdo
+da cifra (obra licenciada) — quando o que se quer é só a URL.
+
 ## Vocabulário: "escala", não "culto"
 
 Na interface, a entidade que o líder cria chama-se **escala**. No código e no
@@ -177,8 +362,10 @@ teste continuam funcionando; só a entrada no menu some.
 `assignments`, `songs` e `event_songs`. As etapas 4 a 6 normalmente **não
 precisam de migration nova** — só se você acrescentar campos.
 
-Conta de teste no banco local: `samuel@teste.com` / `senhaFinal789`, dono da
-equipe "Ministerio de Louvor" com quatro integrantes.
+Contas de teste no banco local, ambas da equipe "Ministerio de Louvor":
+`samuel@teste.com` / `senhaFinal789` (OWNER) e `maria@teste.com` /
+`mariaTeste2026` (MEMBER — serve para conferir os 403 sem depender de ler o
+código do guard).
 
 ## Convenções do backend
 
@@ -248,6 +435,18 @@ português, `@Transform` para `trim`/lowercase. Use `ParseUUIDPipe` nos params.
    (`legacyWatch` + `signal: SIGKILL`). Não mexa sem entender o porquê:
    `CHOKIDAR_USEPOLLING` **não** resolve, e o engine do Prisma faz o processo
    ignorar SIGTERM.
+5b. **`rootDir` é fixo em `./src`, e `prisma/` está fora do `include`.** Isto
+   custou uma hora: o `include` trazia `prisma/**/*`, e bastou existir um `.ts`
+   ali importando de `../src/` para o TypeScript recalcular a raiz — a saída
+   migrou de `dist/main.js` para `dist/src/main.js` enquanto o nodemon seguia
+   rodando o `dist/main.js` antigo. **A API ficou congelada num build velho
+   sem um único erro aparecer**: `tsc` dizia "0 errors", o log do Nest mostrava
+   as rotas antigas e a rota nova respondia 404. Se isso voltar a acontecer,
+   compare a data de `dist/main.js` com a do fonte antes de procurar bug no
+   código. E apague o `tsconfig.tsbuildinfo` **da raiz do projeto** (não só o
+   de `dist/`): o cache incremental sobrevive à troca de layout e faz o build
+   se declarar atualizado sem emitir nada. Os scripts de `prisma/` rodam por
+   `ts-node`, que já os typecheca ao executar.
 6. **String vazia não passa em `z.string().url().optional()`.** O compose sempre
    define a variável; use `z.preprocess` para tratar `''` como ausente.
 7. **O emulador Android desta máquina é muito lento** (1–2 min para abrir em
