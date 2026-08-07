@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 import { TeamsModule } from './modules/teams/teams.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { PositionsModule } from './modules/positions/positions.module';
@@ -19,8 +21,10 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
   imports: [
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     PrismaModule,
+    StorageModule,
     HealthModule,
     AuthModule,
+    UsersModule,
     TeamsModule,
     MembershipsModule,
     PositionsModule,

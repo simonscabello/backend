@@ -72,6 +72,10 @@ Rotas de negócio: `/api/v1`. `/health` fica fora do prefixo.
 | `DATABASE_URL` | container | montada pelo compose; no Railway vem do banco |
 | `PORT` | container | Railway injeta |
 | `CORS_ORIGINS` | container | `*` em dev |
+| `STORAGE_DIR` | container | raiz das fotos de perfil. `/app/storage` no compose (vira `backend/storage/` no Windows); no Railway, o mount path do Volume — veja `railway.toml` |
+
+Rotas de arquivo: `/uploads/...` é servido pelo express, fora do `/api/v1` e
+sem JWT (o nome é um UUID). Ver `src/modules/storage/`.
 
 ## Solução de problemas
 

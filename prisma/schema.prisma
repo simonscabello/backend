@@ -43,6 +43,10 @@ model User {
   email              String   @unique
   passwordHash       String   @map("password_hash")
   mustChangePassword Boolean  @default(false) @map("must_change_password")
+  /// Caminho do arquivo dentro de STORAGE_DIR (ex.: "avatars/<uuid>.jpg"), nao
+  /// uma URL: o dominio publico muda entre local e producao, e o app monta o
+  /// endereco a partir do proprio host da API.
+  avatarPath         String?  @map("avatar_path")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 

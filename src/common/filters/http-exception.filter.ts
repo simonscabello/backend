@@ -46,6 +46,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       if (code === 'INTERNAL_ERROR') {
         code = httpStatusCode(status);
       }
+
+      const translated =
+        typeof message === 'string' ? LIBRARY_MESSAGES[message] : undefined;
+      if (translated) {
+        code = translated.code;
+        message = translated.message;
+      }
     } else {
       this.logger.error(
         `${request.method} ${request.url}`,
@@ -64,6 +71,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json(body);
   }
 }
+
+/// Mensagens de biblioteca que chegariam ao usuario em ingles. Hoje so o
+/// multer produz uma: o 413 de arquivo grande demais, que ele monta sozinho
+/// dentro do interceptor -- nao da para lancar a excecao ja traduzida.
+const LIBRARY_MESSAGES: Record<string, { code: string; message: string }> = {
+  'File too large': {
+    code: 'FILE_TOO_LARGE',
+    message: 'A imagem é muito grande. Envie uma foto de até 5 MB.',
+  },
+};
 
 function httpStatusCode(status: number): string {
   switch (status) {

@@ -9,11 +9,29 @@
 #    JWT_SECRET     valor aleatório e único; sem default de propósito, a API
 #                   se recusa a subir sem ele
 #    CORS_ORIGINS   domínios permitidos, separados por vírgula (evite "*")
+#    STORAGE_DIR    /data -- precisa ser o mesmo caminho do Volume (abaixo)
 #  Opcionais:
 #    INVITE_BASE_URL   base do link de convite, quando houver página pública
 #    JWT_ACCESS_TTL_SECONDS / REFRESH_TTL_DAYS   têm padrão no código
 #
 #  PORT é injetada pelo Railway e já é lida em src/config/env.ts.
+#
+#  ---- Volume (fotos de perfil) ----
+#
+#  O sistema de arquivos do container é descartado a cada deploy: sem um
+#  Volume, toda foto enviada some na próxima atualização. Volume não se
+#  declara aqui -- crie no painel, no MESMO serviço da API:
+#
+#    Serviço da API → Settings → Volumes → New Volume
+#      Mount path: /data
+#
+#  e defina a variável STORAGE_DIR=/data. A API cria /data/avatars sozinha no
+#  boot. Não use um caminho dentro de /app (a raiz do build): o deploy
+#  sobrescreve a pasta e o ponto de montagem esconderia arquivos do projeto.
+#
+#  O Volume só acompanha uma réplica -- é por isso que numReplicas fica em 1.
+#  Precisando escalar, o passo seguinte é trocar o disco por S3/R2, o que
+#  significa reescrever src/modules/storage/storage.service.ts e nada mais.
 
 [build]
 builder = "RAILPACK"

@@ -32,6 +32,10 @@ services:
       CORS_ORIGINS: "*"
       JWT_SECRET: ${JWT_SECRET:-desenvolvimento-local-troque-em-producao-32+}
       INVITE_BASE_URL: ${INVITE_BASE_URL:-}
+      # Fica dentro do bind mount: as fotos aparecem em backend/storage no
+      # Windows e sobrevivem a recriacao do container. Em producao este caminho
+      # e o ponto de montagem do Volume do Railway.
+      STORAGE_DIR: /app/storage
       # O hot reload em bind mount do Windows depende de polling, configurado em
       # tsconfig.json (watchOptions) e nodemon.json (legacyWatch).
       TZ: America/Sao_Paulo

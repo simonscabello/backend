@@ -6,6 +6,7 @@ import {
 import * as argon2 from 'argon2';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { toPublicUser, type PublicUser } from '../users/public-user';
 import { TokenService, type TokenPair } from './token.service';
 import type {
   ChangePasswordDto,
@@ -13,12 +14,7 @@ import type {
   RegisterDto,
 } from './dto/auth.dto';
 
-export interface PublicUser {
-  id: string;
-  name: string;
-  email: string;
-  mustChangePassword: boolean;
-}
+export type { PublicUser };
 
 export interface SessionResponse extends TokenPair {
   user: PublicUser;
@@ -165,24 +161,11 @@ export class AuthService {
     name: string;
     email: string;
     mustChangePassword: boolean;
+    avatarPath?: string | null;
   }): Promise<SessionResponse> {
     const tokens = await this.tokens.issue(user);
     return { ...tokens, user: toPublicUser(user) };
   }
-}
-
-function toPublicUser(user: {
-  id: string;
-  name: string;
-  email: string;
-  mustChangePassword: boolean;
-}): PublicUser {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    mustChangePassword: user.mustChangePassword,
-  };
 }
 
 /// Hash argon2id de uma senha aleatoria, usado so para gastar tempo quando o

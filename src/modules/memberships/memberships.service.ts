@@ -9,6 +9,7 @@ import { randomBytes } from 'node:crypto';
 import type { Membership } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TokenService } from '../auth/token.service';
+import { avatarUrl } from '../users/public-user';
 import type { CreateMemberDto, UpdateMemberDto } from './dto/membership.dto';
 
 @Injectable()
@@ -28,7 +29,9 @@ export class MembershipsService {
         ...(includeGuests ? {} : { isGuest: false }),
       },
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        user: {
+          select: { id: true, name: true, email: true, avatarPath: true },
+        },
         positions: { include: { position: true } },
       },
       orderBy: [{ role: 'asc' }, { displayName: 'asc' }],
@@ -54,7 +57,9 @@ export class MembershipsService {
           : undefined,
       },
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        user: {
+          select: { id: true, name: true, email: true, avatarPath: true },
+        },
         positions: { include: { position: true } },
       },
     });
@@ -108,7 +113,9 @@ export class MembershipsService {
           role: dto.role,
         },
         include: {
-          user: { select: { id: true, name: true, email: true } },
+          user: {
+          select: { id: true, name: true, email: true, avatarPath: true },
+        },
           positions: { include: { position: true } },
         },
       });
@@ -216,7 +223,12 @@ function toPublicMember(member: {
   phone: string | null;
   joinedAt: Date | null;
   isGuest: boolean;
-  user: { id: string; name: string; email: string } | null;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    avatarPath: string | null;
+  } | null;
   positions: { position: { id: string; name: string; category: string } }[];
 }) {
   return {
@@ -230,6 +242,9 @@ function toPublicMember(member: {
     /// false = membro cadastrado pelo lider que ainda não criou conta.
     hasAccount: member.user !== null,
     email: member.user?.email ?? null,
+    /// Foto da conta, quando ela existe. Membro sem conta (e convidado) cai na
+    /// inicial do nome, como antes.
+    avatarUrl: avatarUrl(member.user?.avatarPath),
     positions: member.positions.map((p) => ({
       id: p.position.id,
       name: p.position.name,

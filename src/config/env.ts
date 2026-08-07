@@ -9,6 +9,13 @@ const schema = z.object({
   CORS_ORIGINS: z.string().default('*'),
   APP_VERSION: z.string().default('0.1.0'),
 
+  /// Raiz dos arquivos enviados pelos usuarios (hoje so as fotos de perfil,
+  /// em <STORAGE_DIR>/avatars). Precisa apontar para um disco que sobreviva
+  /// ao deploy: no Railway, o caminho de montagem do Volume (/data). Em
+  /// desenvolvimento, uma pasta dentro do projeto -- o bind mount do compose
+  /// leva os arquivos para `backend/storage` no Windows.
+  STORAGE_DIR: z.string().min(1).default('./storage'),
+
   // Autenticacao. JWT_SECRET nao tem default de proposito: em producao ele
   // precisa ser definido explicitamente, e falhar no boot e melhor do que
   // assinar tokens com um segredo conhecido.

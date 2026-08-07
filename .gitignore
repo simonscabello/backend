@@ -13,6 +13,9 @@ npm-debug.log*
 # Prisma
 prisma/*.db
 
+# Arquivos enviados pelos usuarios (fotos de perfil) -- dados, nao codigo.
+storage/
+
 # Editores / SO
 .idea/
 .vscode/

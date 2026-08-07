@@ -4,3 +4,5 @@ coverage
 .git
 .env
 *.log
+# Fotos de perfil do ambiente local: nao entram na imagem.
+storage
