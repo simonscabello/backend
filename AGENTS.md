@@ -446,6 +446,47 @@ traria benefício nenhum ao usuário e quebraria migrations. Ao escrever textos
 novos, use "escala"; "culto" só sobrevive como rótulo do **horário** dentro da
 escala (`Culto 09:00` × `Ensaio 19:00`), que é o sentido correto ali.
 
+## Identidade visual e acessibilidade
+
+Azul (`#1D4ED8`) é a marca. Âmbar (`tertiary`) é o papel de **atenção**: algo a
+resolver, sem o susto do vermelho, que significa erro. Hoje marca a música sem
+tom na lista do repertório — das 286 importadas a maioria chegou assim, e em
+cinza o buraco lia-se como "está tudo certo".
+
+Três regras sustentam `app_colors.dart`, e cada uma existe porque a versão
+anterior falhava nela:
+
+1. **O cartão fica um passo acima da página, nos dois temas.** No escuro isto
+   inverte o Material 3 de propósito (lá `surfaceContainerLowest` é mais escuro
+   que `surface`): o app usa esse token como "a superfície do cartão", e seguir
+   o M3 fazia o cartão ficar **mais escuro** que a página — lido como buraco.
+2. **Borda de controle tem 3:1** (WCAG 1.4.11). O `outline` antigo dava 1,45:1
+   sobre o campo: existia no código e não na tela. `outline` é para o que se
+   toca (campo, chip, botão contornado); `outlineVariant` é o fio decorativo
+   entre blocos, que não precisa dos 3:1.
+3. **Fundo e cartão se distinguem sem depender da borda.** O par antigo era
+   1,055:1 no claro e 1,034:1 no escuro — a mesma cor.
+
+**`test/theme_contrast_test.dart` mede tudo isso a cada `flutter test`.** Foi
+verificado que ele falha ao restaurar o `outline` antigo. Se mexer na paleta e
+ele reclamar, o número está certo e a cor está errada — olho não mede razão de
+luminância.
+
+Outros pontos do tema (`app_theme.dart`):
+
+- **Foco visível** (`focusColor`) para teclado externo e controle adaptativo. O
+  padrão do Flutter é um preto translúcido que some no tema escuro.
+- **48dp de alvo de toque** em `IconButton` e em linha de lista
+  (`minTileHeight`): uma `ListTile` `dense` chegava a ~40 e escapava do dedo de
+  quem está com o instrumento na mão.
+- **Um raio por papel**: `radiusMd` (12) para controles, `radiusLg` (16) para
+  cartões, `radiusPill` para etiquetas. `radiusXl` e `radiusHero` saíram — o
+  segundo nunca foi usado e o primeiro dava ao app três raios de cartão
+  diferentes conforme a tela.
+- A **sombra do `AppCard` não é o que faz o cartão existir**; é a cor. A sombra
+  só arredonda a transição, e por isso o cartão continua legível com "reduzir
+  animações" ligado.
+
 ## Os horários da escala na tela
 
 `EventTimesList` (`features/events/presentation/event_times.dart`) desenha os
