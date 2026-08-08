@@ -66,13 +66,20 @@ export class MembershipsController {
     return this.members.remove(teamId, membershipId);
   }
 
-  @TeamRoles('OWNER')
+  /// Lider tambem reseta: quem lidera junto precisa poder resolver "esqueci a
+  /// senha" no sabado a noite sem depender do dono.
+  ///
+  /// **O dono e a excecao**, e o servico e quem barra: esta rota devolve a
+  /// senha temporaria a quem chamou, entao um lider que pudesse reseta-la
+  /// entraria na conta do dono. Papel nenhum se toma por assalto.
+  @TeamRoles('OWNER', 'LEADER')
   @HttpCode(HttpStatus.OK)
   @Post(':membershipId/reset-password')
   resetPassword(
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @CurrentMembership() actor: Membership,
   ) {
-    return this.members.resetPassword(teamId, membershipId);
+    return this.members.resetPassword(teamId, membershipId, actor);
   }
 }

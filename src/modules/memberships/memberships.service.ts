@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -152,8 +153,22 @@ export class MembershipsService {
 
   /// Regra 27: substitui a recuperacao de senha por e-mail no MVP.
   /// A senha temporaria e devolvida uma unica vez e nunca fica em claro.
-  async resetPassword(teamId: string, membershipId: string) {
+  async resetPassword(
+    teamId: string,
+    membershipId: string,
+    actor: Membership,
+  ) {
     const target = await this.findInTeam(teamId, membershipId);
+
+    // Esta rota devolve a senha temporaria a quem chamou. Um lider que
+    // pudesse resetar a do dono sairia daqui com acesso a conta dele -- seria
+    // promover-se a dono por conta propria. So o dono reseta a propria.
+    if (target.role === 'OWNER' && actor.role !== 'OWNER') {
+      throw new ForbiddenException({
+        code: 'CANNOT_RESET_OWNER_PASSWORD',
+        message: 'Apenas o dono da equipe pode redefinir a própria senha.',
+      });
+    }
 
     if (!target.userId) {
       throw new BadRequestException({
