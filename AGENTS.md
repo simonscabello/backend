@@ -526,6 +526,31 @@ A categoria da `Position` é o que sustenta isso: `VOCAL`, `INSTRUMENT`, `TECH`
 e `OTHER`. Multimídia e Som são semeadas como `TECH` em toda equipe nova.
 Códigos de erro: `MULTIPLE_INSTRUMENTS` e `TECH_WITH_BAND`.
 
+## Quem lidera junto: promover a LEADER
+
+`LEADER` e `OWNER` fazem **exatamente as mesmas coisas**. A única diferença que
+existia — só o dono redefinia a senha de um integrante — foi removida de
+propósito: quem lidera junto precisa resolver "esqueci a senha" no sábado à
+noite sem depender do dono.
+
+O que sobra em `OWNER` é ser quem criou a equipe: o papel dele não se altera
+(`CANNOT_DEMOTE_OWNER`) e ele não pode ser removido (`CANNOT_REMOVE_OWNER`).
+
+- **Não existe segundo dono**, e a dívida de transferência de posse continua
+  aberta. O índice parcial `memberships_one_active_owner_per_team` segue de pé,
+  e `UpdateMemberDto` só aceita `LEADER`/`MEMBER`.
+- **Um líder não redefine a senha do dono** → 403 `CANNOT_RESET_OWNER_PASSWORD`.
+  Isto não é zelo: a rota **devolve a senha temporária a quem chamou**, então um
+  líder que pudesse chamá-la sairia dali com acesso à conta do dono. Papel
+  nenhum se toma por assalto. Líder redefinir a de outro líder é permitido — é
+  o mesmo nível de confiança, e foi decisão de quem os promoveu.
+- **Ninguém muda o próprio papel** → 409 `CANNOT_CHANGE_OWN_ROLE`.
+
+No app, em `Equipe → Integrantes → (pessoa)`, no fim do formulário. A tela
+**explica em vez de deixar tentar**: para o dono, para você mesmo e para
+convidado ela mostra o papel atual e o motivo, sem seletor — um seletor
+desabilitado convidaria a insistir.
+
 ## Convidados
 
 Músico de fora chamado para uma ocasião: `Membership` com `isGuest = true`,
