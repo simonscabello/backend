@@ -446,6 +446,31 @@ traria benefício nenhum ao usuário e quebraria migrations. Ao escrever textos
 novos, use "escala"; "culto" só sobrevive como rótulo do **horário** dentro da
 escala (`Culto 09:00` × `Ensaio 19:00`), que é o sentido correto ali.
 
+## Os horários da escala na tela
+
+`EventTimesList` (`features/events/presentation/event_times.dart`) desenha os
+horários no cartão do detalhe **e** no cartão destacado da agenda: uma linha por
+culto mais o ensaio, com o rótulo à esquerda e a hora à direita. Abrir a escala
+não deve reapresentar a mesma informação num formato diferente.
+
+- **Não volte às etiquetas coloridas.** Eram um `Wrap` de pílulas com
+  `primaryContainer` de fundo, e saíram por dois motivos: o texto do ensaio
+  estourava a largura, e aquele azul é **a mesma cor** da faixa de "alguém
+  avisou que não pode" logo abaixo — três linhas de informação corriqueira com
+  o peso visual de um alerta. A cor sobrou só no ícone do culto.
+- Em coluna as horas caem na mesma vertical e ficam comparáveis de relance, que
+  é a pergunta de quem abre a escala. Por isso `FontFeature.tabularFigures()`:
+  sem ele os dois-pontos de "08:30" e "19:00" desalinham.
+- **O ensaio usa `formatRehearsalTime`**, que dá `19:00` no mesmo dia da escala
+  e `sáb 19:00` em outro. A data por extenso ("Ensaio Segunda-feira, 10 de
+  agosto 00:30") era o que quebrava o layout. Há teste travando o formato.
+- Esse rótulo já esteve duplicado em três lugares com formatos diferentes, e a
+  listagem tinha um bug por isso: mostrava só a hora, então ensaio de sábado
+  parecia ser no dia do culto. **Um formatador só, os três chamam.**
+- No **item** da lista os horários seguem em linha corrida
+  (`Manhã 08:30 · Noite 19:00 · Ensaio sáb 19:00`): ali a pergunta é "qual
+  escala é esta?", e a coluna alinhada gastaria três linhas por item.
+
 ## Regras de escalação
 
 Duas regras vêm da prática do culto e são validadas **no backend** (o app só
