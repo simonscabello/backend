@@ -411,6 +411,32 @@ model Song {
   externalId     String? @map("external_id")
   externalSource String? @map("external_source")
 
+  /// A equipe ainda esta aprendendo esta musica.
+  ///
+  /// **Estado do repertorio, marcado a mao, e nao deduzido de escala nenhuma.**
+  /// Duas tentativas anteriores erraram por deduzir. Cadastro nao serve: musica
+  /// cantada ha anos que so hoje entrou no app e nova para o APP, nao para a
+  /// equipe. Historico de execucao tambem nao: tocar uma vez nao encerra a
+  /// novidade -- ela acaba quando a equipe domina a musica e a igreja ja canta
+  /// junto, e quem sabe dizer isso e quem esta la no domingo.
+  ///
+  /// Por isso a marca vive na musica e nao na linha da escala: e o mesmo fato em
+  /// todas as escalas daquele periodo, e some de todas de uma vez quando a
+  /// equipe desmarca no repertorio.
+  isNew Boolean @default(false) @map("is_new")
+
+  /// Numero do hino no Cantor Cristao (1..581). Nulo em cantico.
+  ///
+  /// E como a igreja chama o hino: ninguem pede "Pao da Vida", pede "142". Por
+  /// isso ele entra no `searchText` alem de aparecer na tela, e a aba "Hinos"
+  /// do repertorio ordena por ele em vez de por titulo.
+  ///
+  /// Sem hinario junto de proposito: esta igreja canta um so, e um campo
+  /// "qual hinario" com um unico valor possivel seria uma pergunta sem
+  /// escolha em cada cadastro. No dia em que entrar a Harpa Crista, a coluna
+  /// nasce ali do lado -- os 581 existentes viram Cantor Cristao numa linha.
+  hymnNumber Int?     @map("hymn_number")
+
   isArchived Boolean  @default(false) @map("is_archived")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -420,6 +446,7 @@ model Song {
 
   @@unique([teamId, externalSource, externalId])
   @@index([teamId, isArchived])
+  @@index([teamId, hymnNumber])
   @@map("songs")
 }
 

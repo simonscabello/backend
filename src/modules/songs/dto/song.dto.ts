@@ -1,12 +1,15 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
   IsUrl,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import { SongKind, SongPace } from '@prisma/client';
@@ -89,6 +92,26 @@ class SongFieldsDto {
   @IsUrl({}, { message: 'Link do Spotify inválido.' })
   @MaxLength(500)
   spotifyUrl?: string | null;
+
+  /// A equipe ainda esta aprendendo esta musica.
+  ///
+  /// Estado do repertorio: ligado quando entra, desligado quando a equipe
+  /// domina e a igreja ja canta junto. Nenhuma consulta responde isso -- quem
+  /// responde e quem esta la no domingo.
+  @IsOptional()
+  @IsBoolean()
+  isNew?: boolean;
+
+  /// Numero do hino no Cantor Cristao. Nulo em cantico.
+  ///
+  /// O teto e 581 porque o hinario acaba ali: numero fora da faixa e digitacao
+  /// errada, e gravado ele mandaria a busca por "600" a lugar nenhum.
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Número do hino inválido.' })
+  @Min(1, { message: 'O hino começa em 1.' })
+  @Max(581, { message: 'O Cantor Cristão vai até 581.' })
+  hymnNumber?: number | null;
 }
 
 /// Corpo do POST /songs/from-catalog: a musica de outra equipe que serve de
@@ -96,6 +119,13 @@ class SongFieldsDto {
 export class CopyFromCatalogDto {
   @IsUUID(undefined, { message: 'Música de origem inválida.' })
   sourceSongId!: string;
+
+  /// Se a equipe vai aprende-la agora. Vem da tela de adicionar, e nao da
+  /// musica de origem: que ELES ja dominem a cancao nao diz nada sobre a SUA
+  /// equipe.
+  @IsOptional()
+  @IsBoolean()
+  isNew?: boolean;
 }
 
 /// Corpo do POST /songs/from-external: a musica escolhida na busca externa.
@@ -119,6 +149,11 @@ export class CreateFromExternalDto {
   @IsUrl({}, { message: 'Link do Spotify inválido.' })
   @MaxLength(500)
   spotifyUrl?: string | null;
+
+  /// Se a equipe vai aprende-la agora.
+  @IsOptional()
+  @IsBoolean()
+  isNew?: boolean;
 }
 
 export class CreateSongDto extends SongFieldsDto {

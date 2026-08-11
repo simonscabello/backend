@@ -27,6 +27,7 @@ export const EVENT_SONG_INCLUDE = {
         artist: true,
         defaultKey: true,
         originalKey: true,
+        isNew: true,
         chordsUrl: true,
         lyricsUrl: true,
         youtubeUrl: true,
@@ -51,6 +52,7 @@ interface EventSongRow {
     artist: string | null;
     defaultKey: string | null;
     originalKey: string | null;
+    isNew: boolean;
     chordsUrl: string | null;
     lyricsUrl: string | null;
     youtubeUrl: string | null;
@@ -75,6 +77,13 @@ export function toPublicEventSongs(rows: EventSongRow[]) {
     defaultKey: row.song.defaultKey,
     originalKey: row.song.originalKey,
     note: row.note,
+    /// Estado atual da MUSICA no repertorio, e nao desta linha da escala.
+    ///
+    /// Uma consequencia que vale nomear: quando a equipe desmarca a musica no
+    /// repertorio, o selo some tambem das escalas passadas. E o certo -- "nova"
+    /// e uma frase no presente, dita para quem vai tocar. O texto que ja foi
+    /// para o WhatsApp continua como foi enviado.
+    isNew: row.song.isNew,
     chordsUrl: row.song.chordsUrl,
     lyricsUrl: row.song.lyricsUrl,
     youtubeUrl: row.song.youtubeUrl,

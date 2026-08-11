@@ -29,6 +29,8 @@ const LIST_FIELDS = {
   youtubeUrl: true,
   spotifyUrl: true,
   isArchived: true,
+  isNew: true,
+  hymnNumber: true,
 } satisfies Prisma.SongSelect;
 
 @Injectable()
@@ -149,7 +151,7 @@ export class SongsService {
   ///
   /// Copia, não compartilha: a partir daqui as duas seguem vidas separadas, e
   /// corrigir o artista aqui não mexe no repertório de ninguém.
-  async copyFromCatalog(teamId: string, sourceSongId: string) {
+  async copyFromCatalog(teamId: string, sourceSongId: string, isNew = false) {
     const source = await this.prisma.song.findUnique({
       where: { id: sourceSongId },
     });
@@ -187,6 +189,10 @@ export class SongsService {
         externalId: source.externalId,
         // defaultKey, pace e isArchived NÃO vêm: são a decisão desta equipe
         // sobre em que tom ela canta e como ela sente a música.
+        //
+        // `isNew` também não vem da origem, e sim de quem está adicionando: que
+        // ELES já dominem a canção não diz nada sobre a SUA equipe.
+        isNew,
         searchText: source.searchText,
       },
     });
@@ -212,6 +218,7 @@ export class SongsService {
         lyricsUrl: found?.lyricsUrl ?? null,
         originalKey: found?.originalKey ?? null,
         bpm: found?.bpm ?? null,
+        isNew: dto.isNew ?? false,
         searchText: buildSearchText({ title: dto.title, artist: dto.artist }),
       },
     });
@@ -240,6 +247,7 @@ export class SongsService {
           title: dto.title,
           artist: dto.artist,
           composer: dto.composer,
+          hymnNumber: dto.hymnNumber,
         }),
       },
     });
@@ -252,6 +260,8 @@ export class SongsService {
     const artist = dto.artist === undefined ? current.artist : dto.artist;
     const composer =
       dto.composer === undefined ? current.composer : dto.composer;
+    const hymnNumber =
+      dto.hymnNumber === undefined ? current.hymnNumber : dto.hymnNumber;
 
     if (title !== current.title || artist !== current.artist) {
       await this.assertNotDuplicated(teamId, title, artist, songId);
@@ -261,7 +271,7 @@ export class SongsService {
       where: { id: songId },
       data: {
         ...dto,
-        searchText: buildSearchText({ title, artist, composer }),
+        searchText: buildSearchText({ title, artist, composer, hymnNumber }),
       },
     });
   }

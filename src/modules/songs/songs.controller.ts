@@ -62,7 +62,7 @@ export class SongsController {
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Body() dto: CopyFromCatalogDto,
   ) {
-    return this.songs.copyFromCatalog(teamId, dto.sourceSongId);
+    return this.songs.copyFromCatalog(teamId, dto.sourceSongId, dto.isNew);
   }
 
   /// Busca no Spotify, para a tela de cadastro. Também antes de `:songId`.

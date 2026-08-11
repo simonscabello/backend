@@ -29,7 +29,14 @@ import { buildSearchText, normalizeSearch } from '../src/modules/songs/song-sear
 const prisma = new PrismaClient();
 
 /// O que so a equipe decide -- nao viaja quando o destino e outra igreja.
-const TEAM_DECISIONS = ['defaultKey', 'pace', 'isArchived'] as const;
+///
+/// `isNew` entrou aqui pelo mesmo motivo de `defaultKey`: "a equipe esta
+/// aprendendo esta" e um fato DAQUELA equipe. A musica que voces estreiam este
+/// mes a outra igreja pode cantar ha dez anos.
+///
+/// `hymnNumber` NAO entra: o hino 142 e o 142 em qualquer lugar. Numero de
+/// hinario e fato impresso, nao decisao de equipe -- ele viaja sempre.
+const TEAM_DECISIONS = ['defaultKey', 'pace', 'isArchived', 'isNew'] as const;
 
 interface ExportedSong {
   title: string;
@@ -46,6 +53,8 @@ interface ExportedSong {
   youtubeUrl?: string | null;
   spotifyUrl?: string | null;
   isArchived?: boolean;
+  isNew?: boolean;
+  hymnNumber?: number | null;
   externalSource?: string | null;
   externalId?: string | null;
 }
@@ -108,15 +117,24 @@ async function main(): Promise<void> {
       chordsUrl: song.chordsUrl ?? null,
       youtubeUrl: song.youtubeUrl ?? null,
       spotifyUrl: song.spotifyUrl ?? null,
+      hymnNumber: song.hymnNumber ?? null,
       externalSource: song.externalSource ?? null,
       externalId: song.externalId ?? null,
-      searchText: buildSearchText({ title, artist, composer: song.composer }),
+      // O numero entra no texto de busca: e por "142" que a igreja procura o
+      // hino, e sem isto ele apareceria na tela e ficaria fora da busca.
+      searchText: buildSearchText({
+        title,
+        artist,
+        composer: song.composer,
+        hymnNumber: song.hymnNumber,
+      }),
     };
 
     if (!onlyUniversal) {
       data.defaultKey = song.defaultKey ?? null;
       data.pace = song.pace ?? null;
       data.isArchived = song.isArchived ?? false;
+      data.isNew = song.isNew ?? false;
     }
 
     // Identidade: id externo quando existe (e o mesmo backup do Holyrics em

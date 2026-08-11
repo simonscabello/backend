@@ -51,6 +51,8 @@ async function main(): Promise<void> {
       youtubeUrl: true,
       spotifyUrl: true,
       isArchived: true,
+      isNew: true,
+      hymnNumber: true,
       externalSource: true,
       externalId: true,
     },
@@ -71,6 +73,10 @@ async function main(): Promise<void> {
   console.log(`  com letra   : ${com(songs.filter((s) => s.lyrics).length)}`);
   console.log(`  com cifra   : ${com(songs.filter((s) => s.chordsUrl).length)}`);
   console.log(`  com tom da equipe: ${com(songs.filter((s) => s.defaultKey).length)}`);
+  // Conferir os hinos aqui evita descobrir no destino que a numeracao ficou
+  // para tras: sem numero nao ha aba "Hinos" nem busca por "142".
+  console.log(`  hinos numerados  : ${com(songs.filter((s) => s.hymnNumber).length)}`);
+  console.log(`  em aprendizado   : ${com(songs.filter((s) => s.isNew).length)}`);
 }
 
 main()

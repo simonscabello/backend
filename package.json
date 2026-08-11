@@ -19,7 +19,9 @@
     "prisma:studio": "prisma studio --hostname 0.0.0.0",
     "seed": "ts-node prisma/seed.ts",
     "import:holyrics": "ts-node prisma/import-holyrics.ts",
+    "import:hymns": "ts-node prisma/import-hymns.ts",
     "enrich:songs": "ts-node prisma/enrich-songs.ts",
+    "enrich:hymns": "ts-node prisma/enrich-hymns.ts",
     "export:songs": "ts-node prisma/export-songs.ts",
     "import:songs": "ts-node prisma/import-songs.ts",
     "merge:backup": "ts-node prisma/merge-into-backup.ts"

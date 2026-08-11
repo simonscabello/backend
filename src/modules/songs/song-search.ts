@@ -18,12 +18,28 @@ export function normalizeSearch(value: string): string {
 }
 
 /// O que a busca de uma musica compara: titulo, artista e compositor juntos.
+///
+/// Hino entra tambem pelo numero, em tres formas: "142", "142" com zeros
+/// ("0142" nao, mas "142" casa o "cc 142" digitado) e "cc 142". E como a
+/// igreja chama o hino -- ninguem procura "Pao da Vida", procura "142" ou
+/// "cantor cristao 142". Sem isso, o numero estaria na tela e fora da busca.
 export function buildSearchText(song: {
   title: string;
   artist?: string | null;
   composer?: string | null;
+  hymnNumber?: number | null;
 }): string {
+  const numero = song.hymnNumber
+    ? [
+        String(song.hymnNumber),
+        // Com zeros a esquerda: e assim que o hinario imprime ("007").
+        String(song.hymnNumber).padStart(3, '0'),
+        `cc ${song.hymnNumber}`,
+        `hino ${song.hymnNumber}`,
+      ]
+    : [];
+
   return normalizeSearch(
-    [song.title, song.artist, song.composer].filter(Boolean).join(' '),
+    [song.title, song.artist, song.composer, ...numero].filter(Boolean).join(' '),
   );
 }
