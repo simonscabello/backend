@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Completa os links das musicas que estao sem eles, buscando nas APIs
  * publicas de cada servico.
  *
@@ -19,6 +19,10 @@
  * ---------------------------------------------------------------------------
  * O QUE ESTE SCRIPT NAO FAZ: CIFRA
  * ---------------------------------------------------------------------------
+ * (Isso vale para busca por ARTISTA. As COLETANEAS sao outra historia -- veja
+ * `recoverFromCollections` mais abaixo: la nao ha palpite de slug, ha um indice
+ * inteiro baixado de uma vez.)
+ *
  * O CifraClub nao tem API publica, e montar a URL pelo padrao
  * `cifraclub.com.br/<artista>/<musica>/` foi medido contra os 50 links reais
  * que vieram do Holyrics: 23 nem podiam ser tentados (musica sem artista) e,
@@ -56,7 +60,15 @@
  * hino/cantico. Rode com --dry-run primeiro: ele mostra o que faria.
  */
 import { PrismaClient } from '@prisma/client';
-import { buildSearchText } from '../src/modules/songs/song-search';
+import { buildSearchText, normalizeSearch } from '../src/modules/songs/song-search';
+import {
+  COLECOES,
+  type ItemDaColecao,
+  baixarColecao,
+  colecaoDoArtista,
+  mesmasPalavrasOutraOrdem,
+  semelhanca,
+} from './cifraclub-collections';
 import { matches } from '../src/modules/songs/external/song-match';
 import {
   bpmFromHtml,
@@ -426,6 +438,131 @@ async function recoverArtists(
   );
 }
 
+// --------------------------------------------- cifra pelas coletaneas
+//
+// Os utilitarios de casamento moram em ./cifraclub-collections.ts: o import
+// das coletaneas usa os mesmos, e duas copias divergiriam na primeira
+// correcao -- e aqui cada guarda nasceu de um falso positivo real.
+
+/// Acha cifra para quem os provedores nao alcancam, casando contra o indice
+/// das coletaneas.
+///
+/// **Grava so o que e quase certo.** Titulo identico, ou 75% de semelhanca --
+/// que cobre "Alfa, Omega" contra "Alfa e Omega" e "Quao Grande E o Meu Deus"
+/// contra "Quao Grande E Meu Deus". Abaixo disso o palpite e listado e NAO
+/// gravado: medido no acervo, a faixa de 50 a 74% mistura acerto ("Grande e o
+/// Senhor + Maravilhoso es" -> "Grande E o Senhor") com erro grosseiro ("So Tu
+/// Es Santo" -> "Santo Espirito"), e nao ha segundo sinal para desempatar --
+/// diferente dos hinos, onde o numero decidia.
+async function recoverFromCollections(
+  teamId: string,
+  dryRun: boolean,
+): Promise<void> {
+  const songs = await prisma.song.findMany({
+    where: { teamId, isArchived: false, chordsUrl: null },
+    select: { id: true, title: true, artist: true },
+    orderBy: { searchText: 'asc' },
+  });
+
+  if (!songs.length) return;
+
+  console.log(`\n=== coletaneas: ${songs.length} musicas sem cifra ===`);
+
+  const indice: ItemDaColecao[] = [];
+  for (const slug of COLECOES) {
+    const itens = await baixarColecao(slug);
+    console.log(`  ${slug}: ${itens.length} paginas`);
+    indice.push(...itens);
+    await sleep(700);
+  }
+
+  if (!indice.length) {
+    console.log('  nenhuma coletanea respondeu — pulando');
+    return;
+  }
+
+  let gravados = 0;
+  const duvidosos: string[] = [];
+
+  for (const song of songs) {
+    const preferida = colecaoDoArtista(song.artist);
+    const alvo = normalizeSearch(song.title);
+
+    // A coletanea que o artista indica e procurada primeiro e vence se tiver
+    // qualquer casamento aceitavel. "A Mensagem da Cruz" existe nas duas, e o
+    // acervo diz Harpa Crista -- a pagina da Harpa e a certa, mesmo quando a
+    // do corinhos bate o titulo mais ao pe da letra (a da Harpa traz o numero
+    // junto: "A Mensagem da Cruz - 291").
+    const ordem = preferida
+      ? [
+          indice.filter((i) => i.colecao === preferida),
+          indice.filter((i) => i.colecao !== preferida),
+        ]
+      : [indice];
+
+    let melhor: ItemDaColecao | null = null;
+    let score = 0;
+    let identico = false;
+
+    for (const grupo of ordem) {
+      for (const item of grupo) {
+        // Igualdade literal vence qualquer semelhanca, e e o unico caminho
+        // para titulo de uma palavra so.
+        const igual = normalizeSearch(item.comparavel) === alvo;
+        const s = igual ? 1 : semelhanca(song.title, item.comparavel);
+        if (s > score) {
+          score = s;
+          melhor = item;
+          identico = igual;
+        }
+      }
+      // Achou algo bom na coletanea do artista: nao procura nas outras.
+      if (melhor && (identico || score >= 0.75)) break;
+    }
+
+    if (!melhor || score < 0.5) continue;
+
+    if (!identico && mesmasPalavrasOutraOrdem(song.title, melhor.comparavel)) {
+      duvidosos.push(
+        `  ? ${song.title} → "${melhor.titulo}" (mesmas palavras, ordem trocada)\n      ${melhor.url}`,
+      );
+      continue;
+    }
+
+    if (!identico && score < 0.75) {
+      duvidosos.push(
+        `  ? ${song.title} → "${melhor.titulo}" (${Math.round(score * 100)}%)\n      ${melhor.url}`,
+      );
+      continue;
+    }
+
+    console.log(
+      `  ${song.title}${identico ? '' : ` → "${melhor.titulo}"`}\n    ${melhor.url}`,
+    );
+
+    if (!dryRun) {
+      await prisma.song.update({
+        where: { id: song.id },
+        data: { chordsUrl: melhor.url },
+      });
+    }
+    gravados++;
+  }
+
+  console.log(
+    `  -> ${gravados} ${dryRun ? 'seriam preenchidos' : 'preenchidos'}, ` +
+      `${duvidosos.length} parecidos demais para gravar sozinho`,
+  );
+
+  if (duvidosos.length) {
+    console.log(
+      `\n  Estes NAO foram gravados. Alguns estao certos (medley costuma casar\n` +
+        `  com a primeira parte), outros nao. Confira e cole o link a mao:`,
+    );
+    for (const d of duvidosos) console.log(d);
+  }
+}
+
 // ------------------------------------------------ tom original da gravacao
 
 /// Le tom e andamento da pagina do CifraClub, numa visita so.
@@ -576,6 +713,13 @@ async function main(): Promise<void> {
   // provedores logo abaixo, na mesma execucao.
   if (!only || only.some((o) => 'artista'.includes(o))) {
     await recoverArtists(teamId, dryRun, limit);
+  }
+
+  // Antes do tom: as cifras achadas aqui entram na varredura de tom e bpm logo
+  // abaixo, na mesma execucao. Custa duas requisicoes no total (um indice por
+  // coletanea), entao nao respeita --limit nem tem cota.
+  if (!only || only.some((o) => 'coletanea'.includes(o) || 'colecao'.includes(o))) {
+    await recoverFromCollections(teamId, dryRun);
   }
 
   // Depois dos artistas e antes dos links: o provedor de cifra abaixo pode

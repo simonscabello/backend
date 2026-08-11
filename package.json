@@ -20,6 +20,7 @@
     "seed": "ts-node prisma/seed.ts",
     "import:holyrics": "ts-node prisma/import-holyrics.ts",
     "import:hymns": "ts-node prisma/import-hymns.ts",
+    "import:collection": "ts-node prisma/import-collection.ts",
     "enrich:songs": "ts-node prisma/enrich-songs.ts",
     "enrich:hymns": "ts-node prisma/enrich-hymns.ts",
     "export:songs": "ts-node prisma/export-songs.ts",
